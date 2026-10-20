@@ -1,0 +1,41 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Run test suite
+        run: |
+          node scripts/check-syntax.js
+          node --test test/*.test.js
+
+      - name: Package extension artifact
+        run: |
+          TAG="${{ github.ref_name }}"
+          ZIP_NAME="f95-update-tracker-${TAG}.zip"
+          zip -r "$ZIP_NAME" manifest.json icons/ src/
+          echo "ZIP_NAME=$ZIP_NAME" >> $GITHUB_ENV
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ github.ref_name }}" "$ZIP_NAME" \
+            --title "f95-update-tracker ${{ github.ref_name }}" \
+            --generate-notes
