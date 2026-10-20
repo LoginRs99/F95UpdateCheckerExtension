@@ -38,7 +38,7 @@ A lightweight, zero-dependency browser extension for tracking your installed ver
 
 ### Chromium Browsers (Google Chrome, Brave, Microsoft Edge, Vivaldi, Opera)
 
-1. Go to the [Releases](https://github.com/LoginRs99/F95UpdateCheckerExtension/releases) page and download `f95-update-tracker-chromium-v0.4.0.zip`.
+1. Go to the [Releases](https://github.com/LoginRs99/F95UpdateCheckerExtension/releases) page and download `f95-update-tracker-chromium-v0.4.1.zip`.
 2. Extract the ZIP archive to a folder on your computer.
 3. Open your browser and navigate to `chrome://extensions/`.
 4. Enable **Developer mode** using the toggle switch in the upper-right corner.
@@ -52,7 +52,7 @@ A lightweight, zero-dependency browser extension for tracking your installed ver
 Firefox and Zen support Manifest V3 with ES module event pages (Firefox 121.0+).
 
 #### Option A: Temporary Add-on (Testing / Development)
-1. Download `f95-update-tracker-firefox-v0.4.0.zip` from [Releases](https://github.com/LoginRs99/F95UpdateCheckerExtension/releases) and extract it (or run `node scripts/build.js` locally to generate `dist/firefox/`).
+1. Download `f95-update-tracker-firefox-v0.4.1.zip` from [Releases](https://github.com/LoginRs99/F95UpdateCheckerExtension/releases) and extract it (or run `node scripts/build.js` locally to generate `dist/firefox/`).
 2. In Firefox or Zen Browser, navigate to:
    ```text
    about:debugging#/runtime/this-firefox
@@ -63,10 +63,10 @@ Firefox and Zen support Manifest V3 with ES module event pages (Firefox 121.0+).
 
 #### Option B: Permanent Installation (Self-Signed via AMO Unlisted)
 Release artifacts are unsigned (open-source policy: no private developer signing keys in repository). To install permanently:
-1. Download `f95-update-tracker-firefox-v0.4.0.zip`.
+1. Download `f95-update-tracker-firefox-v0.4.1.zip`.
 2. Visit the [Mozilla Add-on Developer Hub](https://addons.mozilla.org/developers/addon/submit/upload-unlisted).
 3. Choose **On your own (unlisted)** distribution.
-4. Upload `f95-update-tracker-firefox-v0.4.0.zip`.
+4. Upload `f95-update-tracker-firefox-v0.4.1.zip`.
 5. Download your signed `.xpi` file once automated checks complete.
 6. Drag and drop the `.xpi` into Firefox/Zen or install via `about:addons` -> Gear icon -> **Install Add-on From File...**.
 
