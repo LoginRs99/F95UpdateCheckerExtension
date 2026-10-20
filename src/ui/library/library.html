@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>F95 Update Tracker - Library</title>
+  <link rel="stylesheet" href="library.css">
+</head>
+<body>
+  <div class="app-layout">
+    <header class="app-header">
+      <div class="brand">
+        <h1 class="app-title">F95 Update Tracker</h1>
+        <span class="version-tag">v0.1.0</span>
+      </div>
+      <div class="header-actions">
+        <button id="btn-refresh" class="btn btn-secondary">Check for Updates</button>
+      </div>
+    </header>
+
+    <div class="main-content">
+      <!-- Toolbar: Filters and Search -->
+      <section class="toolbar">
+        <div class="filter-group">
+          <input type="text" id="filter-search" class="input" placeholder="Search by title, tag, notes..." />
+          <select id="filter-status" class="select">
+            <option value="all">Status: All</option>
+            <option value="update">Updates Available</option>
+            <option value="current">Up to Date</option>
+            <option value="archived">Archived</option>
+          </select>
+          <select id="filter-tag" class="select">
+            <option value="all">Tag: All</option>
+          </select>
+          <select id="sort-by" class="select">
+            <option value="title_asc">Sort: Title (A-Z)</option>
+            <option value="latest_seen">Sort: Last Updated</option>
+            <option value="added_desc">Sort: Recently Added</option>
+          </select>
+        </div>
+
+        <div class="bulk-group">
+          <button id="btn-bulk-archive" class="btn btn-secondary" disabled>Bulk Archive</button>
+          <button id="btn-bulk-delete" class="btn btn-danger" disabled>Bulk Delete</button>
+        </div>
+      </section>
+
+      <!-- Status banner -->
+      <div id="status-banner" class="status-banner" style="display: none;"></div>
+
+      <!-- Games Table Container -->
+      <section class="table-container">
+        <table class="games-table">
+          <thead>
+            <tr>
+              <th width="36"><input type="checkbox" id="select-all" /></th>
+              <th>Game Title</th>
+              <th width="120">Installed</th>
+              <th width="120">Latest</th>
+              <th width="100">Status</th>
+              <th>Tags</th>
+              <th>Notes</th>
+              <th width="140" class="text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="games-tbody">
+            <tr>
+              <td colspan="8" class="text-center py-6">Loading games...</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <!-- Settings and Backup Section -->
+      <section class="settings-section">
+        <div class="card">
+          <h2 class="card-title">Settings</h2>
+          <div class="settings-grid">
+            <div class="form-group">
+              <label for="setting-poll-minutes">Poll Interval (minutes)</label>
+              <input type="number" id="setting-poll-minutes" min="15" max="1440" class="input" />
+            </div>
+            <div class="form-group">
+              <label for="setting-page-depth">Page Depth Cap</label>
+              <input type="number" id="setting-page-depth" min="1" max="10" class="input" />
+            </div>
+            <div class="form-group">
+              <label for="setting-daily-cap">Daily Request Cap</label>
+              <input type="number" id="setting-daily-cap" min="10" max="1000" class="input" />
+            </div>
+          </div>
+          <div class="settings-actions">
+            <button id="btn-save-settings" class="btn btn-primary">Save Settings</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2 class="card-title">Backup & Restore</h2>
+          <p class="card-desc">Export your tracked games, versions, and tags to JSON, or restore from a backup.</p>
+          <div class="backup-actions">
+            <button id="btn-export-json" class="btn btn-secondary">Export JSON</button>
+            <label class="btn btn-secondary file-label">
+              Import JSON
+              <input type="file" id="import-file-input" accept=".json" style="display: none;" />
+            </label>
+          </div>
+          <div id="import-status" class="import-status"></div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <script type="module" src="library.js"></script>
+</body>
+</html>

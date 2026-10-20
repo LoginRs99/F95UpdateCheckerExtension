@@ -1,0 +1,197 @@
+// src/background/detector.js
+// Pure detection and parsing functions for updates, titles, versions, prefixes, and changelogs.
+
+// Known XenForo prefix ID or label mappings (if numeric IDs are used by latest_data.php)
+export const KNOWN_PREFIX_LABELS = {
+  2: 'Completed',
+  3: 'Abandoned',
+  4: 'On Hold',
+  116: 'VN',
+  117: 'RPGM'
+};
+
+/**
+ * Extracts thread ID from an F95zone URL or path.
+ * Supports /threads/<slug>.<id>/, /threads/<id>/, and full URLs.
+ */
+export function parseThreadIdFromUrl(url) {
+  if (!url || typeof url !== 'string') return null;
+  const match = url.match(/\/threads\/(?:[^\/?#]+\.)?(\d+)/i);
+  return match ? match[1] : null;
+}
+
+/**
+ * Parses thread heading text to extract clean title, version, and prefixes.
+ * Example: "[Completed] [VN] My Game [v1.0.5] [StudioName]"
+ */
+export function parseThreadHeading(rawHeading) {
+  if (!rawHeading || typeof rawHeading !== 'string') {
+    return { title: '', version: '', prefixes: [] };
+  }
+
+  let text = rawHeading.replace(/\s+/g, ' ').trim();
+  const prefixes = [];
+
+  // Match leading bracketed tags or label spans, e.g. [Completed] [VN]
+  const leadingBracketsRegex = /^(?:\[([^\]]+)\]\s*)+/;
+  const leadingMatch = text.match(leadingBracketsRegex);
+  if (leadingMatch) {
+    const bracketBlocks = [...text.matchAll(/\[([^\]]+)\]/g)];
+    // Check if these appear at the beginning of the string
+    let currentIdx = 0;
+    for (const b of bracketBlocks) {
+      if (b.index === currentIdx) {
+        prefixes.push(b[1].trim());
+        currentIdx += b[0].length;
+        while (text[currentIdx] === ' ') currentIdx++;
+      } else {
+        break;
+      }
+    }
+    text = text.slice(currentIdx).trim();
+  }
+
+  // Look for version pattern inside brackets anywhere in the remainder:
+  // e.g. [v0.12.3], [0.5], [Ch.2], [Ep. 1-3], [Part 1]
+  let version = '';
+  const versionMatch = text.match(/\[(v?[\d][^\]]*|Ch\.[^\]]*|Ep\.[^\]]*|Part\s*[\d][^\]]*)\]/i);
+  if (versionMatch) {
+    version = versionMatch[1].trim();
+  }
+
+  // Look for developer/creator brackets at the end: e.g. [DevName]
+  const trailingDevMatch = text.match(/\s*\[([^\]]+)\]\s*$/);
+  let cleanTitle = text;
+  if (trailingDevMatch && trailingDevMatch[1] !== version) {
+    cleanTitle = cleanTitle.slice(0, trailingDevMatch.index).trim();
+  }
+  if (versionMatch) {
+    cleanTitle = cleanTitle.replace(versionMatch[0], '').replace(/\s+/g, ' ').trim();
+  }
+
+  return {
+    title: cleanTitle || text,
+    version,
+    prefixes
+  };
+}
+
+/**
+ * Pure function: compares existing stored GameRecord with incoming data from forum poller or scrape.
+ * Versions are opaque strings: any difference from installedVersion = update.
+ */
+export function detectChanges(storedGame, incoming) {
+  if (!storedGame) return { hasChanges: false, updatedGame: null, events: [] };
+
+  const events = [];
+  const updatedGame = { ...storedGame };
+  let hasChanges = false;
+
+  // 1. Title Change
+  const incomingTitle = (incoming.title || '').trim();
+  if (incomingTitle && incomingTitle !== storedGame.title) {
+    events.push({
+      type: 'title_change',
+      threadId: storedGame.id,
+      oldTitle: storedGame.title,
+      newTitle: incomingTitle
+    });
+    updatedGame.prevTitle = storedGame.title;
+    updatedGame.title = incomingTitle;
+    hasChanges = true;
+  }
+
+  // 2. Version Change (opaque string comparison)
+  const incomingVersion = (incoming.version || '').trim();
+  if (incomingVersion && incomingVersion !== storedGame.latestVersion) {
+    updatedGame.latestVersion = incomingVersion;
+    hasChanges = true;
+
+    // Check if new latestVersion differs from installedVersion
+    if (incomingVersion !== storedGame.installedVersion) {
+      updatedGame.status = 'update';
+      events.push({
+        type: 'version_change',
+        threadId: storedGame.id,
+        title: updatedGame.title,
+        oldVersion: storedGame.installedVersion,
+        newVersion: incomingVersion
+      });
+    } else {
+      updatedGame.status = 'current';
+    }
+  }
+
+  // 3. Prefix / Status Change
+  if (Array.isArray(incoming.prefixes) && incoming.prefixes.length > 0) {
+    const oldP = (storedGame.prefixes || []).map(String).sort().join(',');
+    const newP = incoming.prefixes.map(String).sort().join(',');
+    if (oldP !== newP) {
+      events.push({
+        type: 'prefix_change',
+        threadId: storedGame.id,
+        title: updatedGame.title,
+        oldPrefixes: storedGame.prefixes || [],
+        newPrefixes: incoming.prefixes
+      });
+      updatedGame.prefixes = incoming.prefixes;
+      hasChanges = true;
+    }
+  }
+
+  if (incoming.ts) {
+    updatedGame.latestSeenAt = Number(incoming.ts) * 1000;
+    hasChanges = true;
+  }
+
+  return {
+    hasChanges,
+    updatedGame,
+    events
+  };
+}
+
+/**
+ * Extracts changelog snippet from thread HTML.
+ * Never throws. Falls back gracefully.
+ */
+export function parseChangelogFromHtml(html, oldVersion = '', newVersion = '') {
+  const fallback = `Updated: ${oldVersion || 'unknown'} -> ${newVersion || 'new'}`;
+  if (!html || typeof html !== 'string') return fallback;
+
+  try {
+    // 1. Look for spoiler with Changelog in the spoiler button or header
+    const spoilerRegex = /<div[^>]*class="[^"]*bbCodeSpoiler[^"]*"[^>]*>([\s\S]*?)<\/div>\s*<\/div>/gi;
+    const spoilers = [...html.matchAll(spoilerRegex)];
+    for (const sp of spoilers) {
+      const spContent = sp[0];
+      if (/changelog|change-log|changes|updates/i.test(spContent)) {
+        // Strip HTML tags safely to plain text
+        const text = spContent
+          .replace(/<button[\s\S]*?<\/button>/gi, '') // remove button label
+          .replace(/<[^>]+>/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+        if (text.length > 10) {
+          return text.slice(0, 300) + (text.length > 300 ? '...' : '');
+        }
+      }
+    }
+
+    // 2. Look for bbCodeBlock or bold Changelog label
+    const headingMatch = html.match(/(?:<b>|<strong>|\b)(?:Changelog|Change Log|Updates)(?:<\/b>|<\/strong>|:)([\s\S]{10,400})/i);
+    if (headingMatch && headingMatch[1]) {
+      const text = headingMatch[1]
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      if (text.length > 10) {
+        return text.slice(0, 300) + (text.length > 300 ? '...' : '');
+      }
+    }
+  } catch {
+    // Return fallback on any unexpected issue
+  }
+
+  return fallback;
+}
