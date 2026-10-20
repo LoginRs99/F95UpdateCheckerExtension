@@ -1,0 +1,21 @@
+# OS and editor files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.vscode/
+.idea/
+
+# Captures and raw data
+raw/
+captures/
+
+# Node
+node_modules/
+npm-debug.log*
+
+# Release archives
+*.zip
+*.tar.gz
+dist/
+build/

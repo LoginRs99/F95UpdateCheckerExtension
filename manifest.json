@@ -1,0 +1,56 @@
+{
+  "manifest_version": 3,
+  "name": "f95-update-tracker",
+  "version": "0.1.0",
+  "description": "Tracks installed versions of F95zone games and notifies you of new updates.",
+  "permissions": [
+    "alarms",
+    "storage",
+    "notifications"
+  ],
+  "host_permissions": [
+    "https://f95zone.to/*"
+  ],
+  "background": {
+    "service_worker": "src/background/poller.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://f95zone.to/threads/*"
+      ],
+      "js": [
+        "src/content/track-button.js"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://f95zone.to/*"
+      ],
+      "js": [
+        "src/content/highlight.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "src/ui/popup/popup.html",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    },
+    "default_title": "F95 Update Tracker"
+  },
+  "options_ui": {
+    "page": "src/ui/library/library.html",
+    "open_in_tab": true
+  },
+  "icons": {
+    "16": "icons/icon-16.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  }
+}

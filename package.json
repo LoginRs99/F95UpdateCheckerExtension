@@ -1,0 +1,13 @@
+{
+  "name": "f95-update-tracker",
+  "version": "0.1.0",
+  "description": "Lightweight Chromium Manifest V3 extension to track F95zone game updates",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "generate-icons": "node scripts/generate-icons.js",
+    "test": "node --test test/*.test.js",
+    "check": "node scripts/check-syntax.js"
+  },
+  "devDependencies": {}
+}
