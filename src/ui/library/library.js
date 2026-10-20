@@ -438,6 +438,30 @@ document.querySelectorAll('.metric-card[data-filter]').forEach(card => {
   });
 });
 
+// Quick Add Game by URL or Thread ID
+const btnAddGame = document.getElementById('btn-add-game');
+if (btnAddGame) {
+  btnAddGame.addEventListener('click', async () => {
+    const input = prompt('Enter F95zone thread URL or thread ID (e.g. 305500 or https://f95zone.to/threads/slug.305500/):');
+    if (!input || !input.trim()) return;
+
+    try {
+      showBanner('Adding game...', 'success');
+      const res = await extAPI.runtime.sendMessage({ type: 'QUICK_ADD_GAME', input: input.trim() });
+      if (res && res.error) {
+        showBanner(res.error, 'error');
+      } else if (res && res.alreadyTracked) {
+        showBanner(`"${res.game.title}" is already in your library.`);
+      } else if (res && res.game) {
+        showBanner(`Successfully added "${res.game.title}".`);
+        await loadData();
+      }
+    } catch (err) {
+      showBanner('Failed to add game: ' + err.message, 'error');
+    }
+  });
+}
+
 // Keyboard shortcut: '/' focuses search
 window.addEventListener('keydown', (e) => {
   if (e.key === '/' && document.activeElement !== filterSearch && !['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) {

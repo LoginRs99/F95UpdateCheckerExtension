@@ -174,5 +174,13 @@ test.describe('Popup and Library UI', () => {
 
     await expect(statusBanner).toContainText('Successfully imported');
     await expect(page.locator('#games-tbody')).toContainText('Imported Adventure');
+
+    // Test Quick Add Game by URL / ID via prompt
+    page.once('dialog', async (dialog) => {
+      await dialog.accept('https://f95zone.to/threads/tunnelbound.305500/');
+    });
+    await page.locator('#btn-add-game').click();
+    await expect(statusBanner).toContainText('Successfully added', { timeout: 5000 });
+    await expect(page.locator('#games-tbody')).toContainText('TunnelBound');
   });
 });

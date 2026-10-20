@@ -3,7 +3,7 @@
 
 export const DEFAULT_SETTINGS = Object.freeze({
   domain: 'f95zone.to',
-  pollMinutes: 30,
+  pollMinutes: 120, // 2 hours default
   pageDepthCap: 3,
   dailyRequestCap: 200,
   lastPollTimestamp: 0,

@@ -107,7 +107,7 @@ export async function runPoll({ manual = false } = {}) {
         break;
       }
 
-      const url = `https://${settings.domain}/sam/latest_alpha/latest_data.php?cmd=list&cat=games&page=${page}&rows=30`;
+      const url = `https://${settings.domain}/sam/latest_alpha/latest_data.php?cmd=list&cat=games&page=${page}&rows=60`;
       totalRequestsThisRun++;
 
       const res = await fetch(url, {
@@ -300,6 +300,60 @@ if (extAPI) {
             const count = await getPendingUpdatesCount();
             await updateBadge(count);
             return game;
+          }
+          case 'QUICK_ADD_GAME': {
+            const raw = String(message.input || '').trim();
+            const match = raw.match(/(?:threads\/(?:[^\/?#]+\.)?)?(\d+)/i);
+            if (!match) return { error: 'Please enter a valid F95zone thread URL or ID.' };
+            const id = match[1];
+
+            const existing = await getGame(id);
+            if (existing) {
+              return { game: existing, alreadyTracked: true };
+            }
+
+            const settings = await getSettings();
+            let title = `Thread #${id}`;
+            let version = 'v1.0.0';
+            let prefixes = [];
+
+            try {
+              const res = await fetch(`https://${settings.domain}/threads/${id}/`, {
+                headers: { 'Accept': 'text/html' }
+              });
+              if (res.ok) {
+                const html = await res.text();
+                const titleMatch = html.match(/<h1[^>]*class="[^"]*p-title-value[^"]*"[^>]*>([\s\S]*?)<\/h1>/i) ||
+                                   html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
+                if (titleMatch) {
+                  const cleanHeading = titleMatch[1].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+                  const vMatch = cleanHeading.match(/\[(v?[\d][^\]]*|Ch\.[^\]]*|Ep\.[^\]]*|Part\s*[\d][^\]]*)\]/i);
+                  if (vMatch) version = vMatch[1].trim();
+                  title = cleanHeading.replace(/^(?:\[[^\]]+\]\s*)+/g, '').replace(/\s*\[[^\]]+\]\s*$/g, '').trim() || title;
+                }
+              }
+            } catch (err) {
+              console.warn('[Poller] Quick add thread fetch error:', err.message);
+            }
+
+            const game = await saveGame({
+              id,
+              url: `https://${settings.domain}/threads/${id}/`,
+              title,
+              installedVersion: version,
+              latestVersion: version,
+              prefixes,
+              tags: [],
+              notes: '',
+              status: 'current',
+              archived: false,
+              addedAt: Date.now(),
+              latestSeenAt: Date.now()
+            });
+
+            const count = await getPendingUpdatesCount();
+            await updateBadge(count);
+            return { game };
           }
           case 'UPDATE_GAME': {
             const game = await updateGame(message.id, message.payload);
