@@ -7,11 +7,13 @@ A lightweight, zero-dependency browser extension for tracking your installed ver
 ## Features
 
 - **Cross-Browser Support**: Native Manifest V3 packages for Chromium (service worker) and Firefox / Zen (ES module event page), sharing a clean, zero-dependency codebase.
-- **One-Click Tracking**: Inject a seamless `+ Track Game` button directly onto F95zone thread pages. Automatically pre-fills the current version and title, allowing you to record your installed version, custom tags, and personal notes.
+- **One-Click Extension Tracking**: Clean forum browsing with zero injected buttons on page content. Automatically detects the active F95zone thread directly inside the extension popup, or via the `+` Quick Add button for any URL or thread ID.
+- **Automatic Version Detection & Dropdown**: Intelligently scans thread headings, changelogs, and spoiler blocks to detect current (latest) and historical/previous versions. Populates a version dropdown so you can pick which version you have installed on your machine with one click.
+- **High-Density Compact Layout**: Linear & Raycast obsidian dark-mode interface built to effortlessly navigate 20–50+ games. Features instant search filtering, status pills (`All`, `Updates`, `Installed`, `Archived`), and smooth click-to-expand details drawers.
 - **Smart Update Detection**: Treats game versions as opaque strings (handling arbitrary formats like `v1.0.0`, `Ch.3 Part 2`, `Ep. 1`, `0.85_Fix2`). Triggers updates whenever the forum's latest version differs from your installed version.
 - **Visual Highlights**: Marks tracked games directly on forum index pages, listing views, and Latest Updates tiles (`[TRACKED]` in green, `[UPDATE <ver>]` in red). Seamlessly updates dynamically loaded cards using a `MutationObserver`.
 - **Gentle Forum Footprint**:
-  - Incremental polling via alarms every 30 minutes with randomized jitter.
+  - Incremental polling via alarms every 2 hours with randomized jitter.
   - Page depth cap and daily request budget cap.
   - Automatic Circuit Breaker with exponential backoff on HTTP 403, 429, or Cloudflare challenge responses.
   - Never runs tight retry loops or hammers the forum.
@@ -20,13 +22,14 @@ A lightweight, zero-dependency browser extension for tracking your installed ver
   - Displays games with pending updates at the top.
   - Compare `Installed → Latest`.
   - One-click actions: **Open Thread**, **Mark Installed**, **Archive**.
+  - Dropdown to switch or adjust installed version anytime.
 - **Management Library & Options**:
   - Full table view with instant search, filtering by status (Updates / Current / Archived) and tags.
+  - Quick Add Game by URL or thread ID.
   - Inline editing of installed versions and notes.
   - Bulk archive and delete operations.
   - Configurable polling intervals and request caps.
   - JSON Backup Export and Restore with strict schema validation.
-- **Theme Support**: Dynamic dark and light mode automatically following `prefers-color-scheme`.
 - **Strict Security & Privacy**: Zero analytics, zero external CDNs or endpoints, no cookies or tokens stored. Uses standard browser sessions via `credentials: 'include'`. All forum-derived content is strictly rendered using `textContent` (zero `innerHTML`).
 
 ---
@@ -35,7 +38,7 @@ A lightweight, zero-dependency browser extension for tracking your installed ver
 
 ### Chromium Browsers (Google Chrome, Brave, Microsoft Edge, Vivaldi, Opera)
 
-1. Go to the [Releases](https://github.com/LoginRs99/F95UpdateCheckerExtension/releases) page and download `f95-update-tracker-chromium-v0.3.0.zip`.
+1. Go to the [Releases](https://github.com/LoginRs99/F95UpdateCheckerExtension/releases) page and download `f95-update-tracker-chromium-v0.4.0.zip`.
 2. Extract the ZIP archive to a folder on your computer.
 3. Open your browser and navigate to `chrome://extensions/`.
 4. Enable **Developer mode** using the toggle switch in the upper-right corner.
@@ -49,7 +52,7 @@ A lightweight, zero-dependency browser extension for tracking your installed ver
 Firefox and Zen support Manifest V3 with ES module event pages (Firefox 121.0+).
 
 #### Option A: Temporary Add-on (Testing / Development)
-1. Download `f95-update-tracker-firefox-v0.3.0.zip` from [Releases](https://github.com/LoginRs99/F95UpdateCheckerExtension/releases) and extract it (or run `node scripts/build.js` locally to generate `dist/firefox/`).
+1. Download `f95-update-tracker-firefox-v0.4.0.zip` from [Releases](https://github.com/LoginRs99/F95UpdateCheckerExtension/releases) and extract it (or run `node scripts/build.js` locally to generate `dist/firefox/`).
 2. In Firefox or Zen Browser, navigate to:
    ```text
    about:debugging#/runtime/this-firefox
@@ -60,10 +63,10 @@ Firefox and Zen support Manifest V3 with ES module event pages (Firefox 121.0+).
 
 #### Option B: Permanent Installation (Self-Signed via AMO Unlisted)
 Release artifacts are unsigned (open-source policy: no private developer signing keys in repository). To install permanently:
-1. Download `f95-update-tracker-firefox-v0.3.0.zip`.
+1. Download `f95-update-tracker-firefox-v0.4.0.zip`.
 2. Visit the [Mozilla Add-on Developer Hub](https://addons.mozilla.org/developers/addon/submit/upload-unlisted).
 3. Choose **On your own (unlisted)** distribution.
-4. Upload `f95-update-tracker-firefox-v0.3.0.zip`.
+4. Upload `f95-update-tracker-firefox-v0.4.0.zip`.
 5. Download your signed `.xpi` file once automated checks complete.
 6. Drag and drop the `.xpi` into Firefox/Zen or install via `about:addons` -> Gear icon -> **Install Add-on From File...**.
 

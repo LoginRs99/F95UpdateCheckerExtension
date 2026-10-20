@@ -24,6 +24,12 @@
         </div>
       </div>
       <div class="header-actions">
+        <button id="btn-toggle-add" class="btn btn-icon" title="Add Game by URL or ID">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+        </button>
         <button id="btn-check-now" class="btn btn-secondary btn-sm" title="Check for updates now">
           <svg class="btn-icon-svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.3"/>
@@ -42,14 +48,46 @@
     <!-- Paused Alert Banner -->
     <div id="popup-paused-alert" class="popup-paused-alert" style="display: none;"></div>
 
-    <!-- Search Bar -->
-    <div class="search-bar">
+    <!-- Active Tab Game Banner -->
+    <div id="active-tab-banner" class="active-tab-banner" style="display: none;"></div>
+
+    <!-- Quick Add Panel -->
+    <div id="quick-add-panel" class="quick-add-panel" style="display: none;">
+      <div class="quick-add-title">Add Game by F95zone URL or ID</div>
+      <div class="quick-add-input-row">
+        <input type="text" id="quick-add-input" class="form-input" placeholder="e.g. https://f95zone.to/threads/305500/ or 305500" autocomplete="off" />
+        <button id="btn-quick-add-resolve" class="btn btn-primary btn-sm">Find</button>
+      </div>
+      <div id="quick-add-preview" class="quick-add-preview" style="display: none;">
+        <div class="preview-game-title" id="preview-title"></div>
+        <div class="preview-field">
+          <label class="preview-label" for="preview-version-select">Installed Version:</label>
+          <div class="version-select-wrapper">
+            <select id="preview-version-select" class="form-select"></select>
+            <input type="text" id="preview-version-custom" class="form-input" placeholder="e.g. v0.9.5" style="display: none;" />
+          </div>
+        </div>
+        <div class="preview-actions">
+          <button id="btn-confirm-add" class="btn btn-primary btn-sm">+ Track Game</button>
+          <button id="btn-cancel-add" class="btn btn-secondary btn-sm">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Controls: Search & Filter Tabs -->
+    <div class="controls-bar">
       <div class="search-input-wrapper">
         <svg class="search-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="11" cy="11" r="8"></circle>
           <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
         </svg>
         <input type="text" id="popup-search" placeholder="Filter tracked games..." autocomplete="off" spellcheck="false" />
+      </div>
+      <div class="filter-pills" id="filter-pills">
+        <button class="filter-pill active" data-filter="all">All <span class="pill-count" id="count-all">0</span></button>
+        <button class="filter-pill" data-filter="updates">Updates <span class="pill-count count-update" id="count-updates">0</span></button>
+        <button class="filter-pill" data-filter="current">Installed <span class="pill-count" id="count-current">0</span></button>
+        <button class="filter-pill" data-filter="archived">Archived <span class="pill-count" id="count-archived">0</span></button>
       </div>
     </div>
 
@@ -67,7 +105,7 @@
         <span class="status-pulse-dot"></span>
         <span id="footer-stats">Tracking 0 games</span>
       </div>
-      <span class="footer-version">v0.3.0</span>
+      <span class="footer-version">v0.4.0</span>
     </footer>
   </div>
 

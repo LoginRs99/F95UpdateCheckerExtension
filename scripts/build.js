@@ -8,7 +8,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const rootDir = path.resolve(__dirname, '..');
 
-const version = '0.3.0';
+const version = '0.4.0';
 
 const baseManifest = {
   manifest_version: 3,
@@ -26,18 +26,10 @@ const baseManifest = {
   content_scripts: [
     {
       matches: [
-        'https://f95zone.to/threads/*'
-      ],
-      js: [
-        'src/content/track-button.js'
-      ],
-      run_at: 'document_idle'
-    },
-    {
-      matches: [
         'https://f95zone.to/*'
       ],
       js: [
+        'src/compat.js',
         'src/content/highlight.js'
       ],
       run_at: 'document_idle'

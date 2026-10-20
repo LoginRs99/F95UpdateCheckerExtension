@@ -16,10 +16,8 @@ const rootDir = path.resolve(__dirname, '../../');
 const extensionPath = path.resolve(rootDir, 'dist/chromium');
 const fixturesDir = path.resolve(rootDir, 'fixtures');
 
-// Ensure dist/chromium is built
-if (!fs.existsSync(path.join(extensionPath, 'manifest.json'))) {
-  execFileSync(process.execPath, [path.join(rootDir, 'scripts', 'build.js')], { stdio: 'inherit' });
-}
+// Ensure dist/chromium is fresh
+execFileSync(process.execPath, [path.join(rootDir, 'scripts', 'build.js')], { stdio: 'ignore' });
 
 export const test = base.extend({
   context: async ({}, use) => {

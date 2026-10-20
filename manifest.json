@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "f95-update-tracker",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Tracks installed versions of F95zone games and notifies you of new updates.",
   "permissions": [
     "alarms",
@@ -14,18 +14,10 @@
   "content_scripts": [
     {
       "matches": [
-        "https://f95zone.to/threads/*"
-      ],
-      "js": [
-        "src/content/track-button.js"
-      ],
-      "run_at": "document_idle"
-    },
-    {
-      "matches": [
         "https://f95zone.to/*"
       ],
       "js": [
+        "src/compat.js",
         "src/content/highlight.js"
       ],
       "run_at": "document_idle"

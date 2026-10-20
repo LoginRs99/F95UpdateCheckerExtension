@@ -11,8 +11,7 @@ flowchart TD
     end
 
     subgraph Content ["Content Scripts"]
-        TrackBtn["track-button.js (on /threads/*)"]
-        Highlight["highlight.js (tiles & links)"]
+        Highlight["highlight.js (tiles, links & thread info)"]
     end
 
     subgraph Extension ["Extension Service Worker"]
@@ -32,8 +31,8 @@ flowchart TD
     Poller --> Detector
     Detector -->|Persist state| Store
     Detector -->|Trigger alerts| Notify
-    TrackBtn -->|Message: Track / Untrack| Store
-    Highlight -->|Query tracked list| Store
+    Highlight -->|Query tracked list & provide thread info| Store
+    Popup -->|Active tab track & quick add| Store
     Popup -->|Read/Write state| Store
     Library -->|Export/Import/Edit| Store
 ```

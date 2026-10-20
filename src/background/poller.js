@@ -16,7 +16,9 @@ import {
 
 import {
   detectChanges,
-  parseChangelogFromHtml
+  parseChangelogFromHtml,
+  extractVersionsFromHtml,
+  parseThreadIdFromUrl
 } from './detector.js';
 
 import {
@@ -301,21 +303,16 @@ if (extAPI) {
             await updateBadge(count);
             return game;
           }
-          case 'QUICK_ADD_GAME': {
-            const raw = String(message.input || '').trim();
-            const match = raw.match(/(?:threads\/(?:[^\/?#]+\.)?)?(\d+)/i);
-            if (!match) return { error: 'Please enter a valid F95zone thread URL or ID.' };
-            const id = match[1];
+          case 'RESOLVE_THREAD': {
+            const id = parseThreadIdFromUrl(String(message.input || ''));
+            if (!id) return { error: 'Please enter a valid F95zone thread URL or ID.' };
 
             const existing = await getGame(id);
-            if (existing) {
-              return { game: existing, alreadyTracked: true };
-            }
-
             const settings = await getSettings();
             let title = `Thread #${id}`;
-            let version = 'v1.0.0';
+            let version = '';
             let prefixes = [];
+            let versions = [];
 
             try {
               const res = await fetch(`https://${settings.domain}/threads/${id}/`, {
@@ -331,21 +328,73 @@ if (extAPI) {
                   if (vMatch) version = vMatch[1].trim();
                   title = cleanHeading.replace(/^(?:\[[^\]]+\]\s*)+/g, '').replace(/\s*\[[^\]]+\]\s*$/g, '').trim() || title;
                 }
+                versions = extractVersionsFromHtml(html, version);
               }
             } catch (err) {
-              console.warn('[Poller] Quick add thread fetch error:', err.message);
+              console.warn('[Poller] Resolve thread fetch error:', err.message);
             }
+
+            return {
+              id,
+              title,
+              latestVersion: version || 'v1.0.0',
+              versions: versions.length > 0 ? versions : [version || 'v1.0.0'],
+              existingGame: existing || null,
+              prefixes
+            };
+          }
+          case 'QUICK_ADD_GAME': {
+            const id = parseThreadIdFromUrl(String(message.input || ''));
+            if (!id) return { error: 'Please enter a valid F95zone thread URL or ID.' };
+
+            const existing = await getGame(id);
+            if (existing) {
+              return { game: existing, alreadyTracked: true };
+            }
+
+            const settings = await getSettings();
+            let title = message.title || `Thread #${id}`;
+            let version = message.latestVersion || 'v1.0.0';
+            let prefixes = message.prefixes || [];
+            let versions = [];
+
+            if (!message.title || !message.latestVersion) {
+              try {
+                const res = await fetch(`https://${settings.domain}/threads/${id}/`, {
+                  headers: { 'Accept': 'text/html' }
+                });
+                if (res.ok) {
+                  const html = await res.text();
+                  const titleMatch = html.match(/<h1[^>]*class="[^"]*p-title-value[^"]*"[^>]*>([\s\S]*?)<\/h1>/i) ||
+                                     html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
+                  if (titleMatch) {
+                    const cleanHeading = titleMatch[1].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+                    const vMatch = cleanHeading.match(/\[(v?[\d][^\]]*|Ch\.[^\]]*|Ep\.[^\]]*|Part\s*[\d][^\]]*)\]/i);
+                    if (vMatch) version = vMatch[1].trim();
+                    title = cleanHeading.replace(/^(?:\[[^\]]+\]\s*)+/g, '').replace(/\s*\[[^\]]+\]\s*$/g, '').trim() || title;
+                  }
+                  versions = extractVersionsFromHtml(html, version);
+                }
+              } catch (err) {
+                console.warn('[Poller] Quick add thread fetch error:', err.message);
+              }
+            }
+
+            const installedVersion = (message.installedVersion !== undefined && message.installedVersion !== '')
+              ? message.installedVersion
+              : version;
+            const status = (installedVersion !== version) ? 'update' : 'current';
 
             const game = await saveGame({
               id,
               url: `https://${settings.domain}/threads/${id}/`,
               title,
-              installedVersion: version,
+              installedVersion,
               latestVersion: version,
               prefixes,
-              tags: [],
-              notes: '',
-              status: 'current',
+              tags: Array.isArray(message.tags) ? message.tags : [],
+              notes: message.notes || '',
+              status,
               archived: false,
               addedAt: Date.now(),
               latestSeenAt: Date.now()
@@ -353,7 +402,7 @@ if (extAPI) {
 
             const count = await getPendingUpdatesCount();
             await updateBadge(count);
-            return { game };
+            return { game, versions };
           }
           case 'UPDATE_GAME': {
             const game = await updateGame(message.id, message.payload);

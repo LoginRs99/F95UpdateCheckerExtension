@@ -8,7 +8,8 @@ import {
   parseThreadIdFromUrl,
   parseThreadHeading,
   detectChanges,
-  parseChangelogFromHtml
+  parseChangelogFromHtml,
+  extractVersionsFromHtml
 } from '../src/background/detector.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -16,6 +17,8 @@ const __dirname = path.dirname(__filename);
 const rootDir = path.resolve(__dirname, '..');
 
 test('parseThreadIdFromUrl extracts thread IDs accurately', () => {
+  assert.equal(parseThreadIdFromUrl('305500'), '305500');
+  assert.equal(parseThreadIdFromUrl('  12345  '), '12345');
   assert.equal(parseThreadIdFromUrl('https://f95zone.to/threads/tunnelbound.305500/'), '305500');
   assert.equal(parseThreadIdFromUrl('https://f95zone.to/threads/305500/'), '305500');
   assert.equal(parseThreadIdFromUrl('/threads/game-name.12345/page-2?order=date#post-99'), '12345');
@@ -134,4 +137,39 @@ test('parseChangelogFromHtml extracts text from thread sample fixture', () => {
   // Fallback test
   const fallback = parseChangelogFromHtml('<div>No changelog here</div>', '1.0', '2.0');
   assert.equal(fallback, 'Updated: 1.0 -> 2.0');
+});
+
+test('extractVersionsFromHtml detects current and previous versions accurately', () => {
+  const sampleChangelog = `
+    <article class="message message--post">
+      <div class="bbWrapper">
+        <b>Changelog:</b><br>
+        v0.21.1 Extra:<br>
+        - Fixed audio bugs<br>
+        v0.21.0:<br>
+        - Added Chapter 4<br>
+        v0.20:<br>
+        - Graphics overhaul<br>
+        v0.19.2:<br>
+        - Balance changes<br>
+        <b>Old Downloads:</b><br>
+        [v0.18] Mega link<br>
+      </div>
+    </article>
+  `;
+
+  const versions = extractVersionsFromHtml(sampleChangelog, 'v0.21.1 Extra');
+  assert.ok(versions.includes('v0.21.1 Extra'), 'Must include current version at top');
+  assert.equal(versions[0], 'v0.21.1 Extra', 'Current version must be first');
+  assert.ok(versions.includes('v0.21.0'), 'Must include previous version v0.21.0');
+  assert.ok(versions.includes('v0.20'), 'Must include previous version v0.20');
+  assert.ok(versions.includes('v0.19.2'), 'Must include previous version v0.19.2');
+  assert.ok(versions.includes('v0.18'), 'Must include bracketed version v0.18');
+
+  // Verify graceful handling when no versions are present
+  const emptyVersions = extractVersionsFromHtml('<div>Just text</div>', '1.0.0');
+  assert.deepEqual(emptyVersions, ['1.0.0']);
+
+  // Verify handling with null/empty inputs
+  assert.deepEqual(extractVersionsFromHtml(null, ''), []);
 });

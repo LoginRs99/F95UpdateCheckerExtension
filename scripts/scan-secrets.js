@@ -20,7 +20,7 @@ const hits = [];
 function scanDir(dir) {
   const entries = fs.readdirSync(dir, { withFileTypes: true });
   for (const entry of entries) {
-    if (entry.name === '.git' || entry.name === 'node_modules' || entry.name === 'dist') continue;
+    if (entry.name === '.git' || entry.name === 'node_modules' || entry.name === 'dist' || entry.name === 'Website' || entry.name === 'raw' || entry.name === 'captures') continue;
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) {
       scanDir(full);

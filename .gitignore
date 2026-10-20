@@ -9,6 +9,7 @@ Thumbs.db
 # Captures and raw data
 raw/
 captures/
+Website/
 
 # Node
 node_modules/
