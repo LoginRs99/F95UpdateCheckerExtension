@@ -54,12 +54,24 @@ flowchart TD
 - **Decision**: Versions are treated as strictly opaque strings. Any distinct string change between `installedVersion` and `latestVersion` triggers an update event.
 - **Rationale**: Game versions on F95zone use arbitrary developer formats (e.g., `v0.12.1a`, `Ch.3 Part 2`, `Ep. 1`, `0.85_Fix2`, `Final`). Semver parsers inevitably fail on non-standard version notations. String difference (`stored !== latest`) is completely resilient.
 
-### 3. Rate Limiting, Jitter & Circuit Breaker
+### 3. Rate Limiting, Jitter, Request Budget & Circuit Breaker
 - **Decision**:
   - Poll interval: default 30 minutes with randomized ±5 minute jitter.
-  - Daily request cap: tracked in local storage; polling pauses if the cap is reached within a 24-hour sliding window.
-  - Page depth cap: maximum 3 pages (or 90 items) per poll cycle.
-  - Circuit Breaker: upon receiving HTTP 403, 429, or HTML challenge pages, trip the breaker with exponential backoff (e.g. 1 hour, 2 hours, 4 hours up to 24 hours), preventing spamming the forum.
+  - Page depth cap (`pageDepthCap`): default 3 pages (up to 90 items per poll cycle).
+  - Daily request cap (`dailyRequestCap`): adjusted to **200 requests/day** (from 150).
+- **Request Budget Math & Rationale**:
+  - A 24-hour day yields 48 poll cycles (at 30-minute intervals).
+  - **Steady-state**: When the browser remains open and no major gap exists, each poll cycle inspects page 1, notices items older than `lastPollTimestamp`, and stops immediately. This consumes exactly **1 request per poll**, or **48 requests/day**.
+  - **Catch-up state**: If the browser was closed for hours (e.g. overnight), the poller pages deeper until items are older than `lastPollTimestamp`, up to `pageDepthCap` (3 pages). 3 to 4 catch-up events per day add ~12-16 requests.
+  - **Changelog fetches**: Throttled to 1 request per detected version change. Assuming 5-10 game updates per day, this adds ~10 requests.
+  - **Upper Bound Evaluation**: If forum activity or closure forced all 48 cycles to page to the maximum depth of 3, consumption would be:
+    $$48 \text{ cycles} \times 3 \text{ pages} = 144 \text{ requests/day}$$
+    A previous limit of 150 left only 6 requests of headroom, which could prematurely trigger the daily cap on active days with multiple changelogs and manual "check now" clicks.
+  - **Conclusion**: Setting `dailyRequestCap = 200` guarantees adequate headroom for heavy days (144 paging + changelog fetches + manual checks) while enforcing a strict ceiling to protect both user accounts and forum infrastructure.
+- **Circuit Breaker**:
+  - Upon encountering HTTP 403, 429, or Cloudflare challenge pages, the circuit breaker immediately engages.
+  - Exponential backoff is applied: 30m, 60m, 120m, 240m up to 24h (`consecutiveFailures`).
+  - While active, all background polling and manual check requests are strictly halted, and both Popup and Library UIs display a paused state alert. No tight retries are ever attempted.
 
 ### 4. DOM Security: Strict `textContent` Rendering
 - **Decision**: All forum-derived content (titles, versions, changelog snippets, notes, tags) is strictly inserted via `.textContent` or `document.createTextNode()`. `innerHTML` is never used.

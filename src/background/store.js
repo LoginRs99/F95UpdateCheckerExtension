@@ -5,7 +5,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   domain: 'f95zone.to',
   pollMinutes: 30,
   pageDepthCap: 3,
-  dailyRequestCap: 150,
+  dailyRequestCap: 200,
   lastPollTimestamp: 0,
   requestCountToday: 0,
   requestDayTimestamp: 0,

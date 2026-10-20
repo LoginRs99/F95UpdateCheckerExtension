@@ -59,7 +59,29 @@ function populateSettings(settings) {
   if (!settings) return;
   settingPollMinutes.value = settings.pollMinutes || 30;
   settingPageDepth.value = settings.pageDepthCap || 3;
-  settingDailyCap.value = settings.dailyRequestCap || 150;
+  settingDailyCap.value = settings.dailyRequestCap || 200;
+  updatePausedStateBanner(settings);
+}
+
+function updatePausedStateBanner(settings) {
+  const banner = document.getElementById('paused-state-banner');
+  if (!banner) return;
+  if (!settings) {
+    banner.style.display = 'none';
+    return;
+  }
+
+  const now = Date.now();
+  if (settings.circuitBreakerUntil && now < settings.circuitBreakerUntil) {
+    const mins = Math.max(1, Math.round((settings.circuitBreakerUntil - now) / 60000));
+    banner.textContent = `⚠️ Polling paused: Circuit breaker active (anti-hammer protection) for ${mins} more minute(s).`;
+    banner.style.display = 'block';
+  } else if (settings.requestCountToday >= settings.dailyRequestCap) {
+    banner.textContent = `⚠️ Polling paused: Daily request cap reached (${settings.requestCountToday}/${settings.dailyRequestCap}). Resets tomorrow.`;
+    banner.style.display = 'block';
+  } else {
+    banner.style.display = 'none';
+  }
 }
 
 function extractTags() {
@@ -360,8 +382,18 @@ btnRefresh.addEventListener('click', async () => {
   btnRefresh.disabled = true;
   btnRefresh.textContent = 'Checking...';
   try {
-    await chrome.runtime.sendMessage({ type: 'POLL_NOW' });
-    showBanner('Check completed.');
+    const res = await chrome.runtime.sendMessage({ type: 'POLL_NOW' });
+    if (res && res.trippedCircuitBreaker) {
+      showBanner('⚠️ Check failed: Circuit breaker tripped due to forum challenge/rate limit.', 'error');
+    } else if (res && res.skipped && res.reason === 'circuit_breaker') {
+      showBanner('⚠️ Polling paused: Circuit breaker active.', 'error');
+    } else if (res && res.skipped && res.reason === 'daily_cap') {
+      showBanner('⚠️ Polling paused: Daily request cap reached.', 'error');
+    } else if (res && res.error) {
+      showBanner(`Check error: ${res.error}`, 'error');
+    } else {
+      showBanner('Check completed.');
+    }
     await loadData();
   } catch (err) {
     showBanner('Check failed: ' + err.message, 'error');

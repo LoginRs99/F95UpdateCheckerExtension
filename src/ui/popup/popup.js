@@ -12,14 +12,40 @@ const searchInput = document.getElementById('popup-search');
 const btnCheckNow = document.getElementById('btn-check-now');
 const btnOpenLibrary = document.getElementById('btn-open-library');
 
+const pausedAlertEl = document.getElementById('popup-paused-alert');
+
 async function loadData() {
   try {
-    const games = await chrome.runtime.sendMessage({ type: 'GET_GAMES' });
+    const [games, status] = await Promise.all([
+      chrome.runtime.sendMessage({ type: 'GET_GAMES' }),
+      chrome.runtime.sendMessage({ type: 'GET_STATUS' })
+    ]);
     allGames = games || {};
+    updatePausedBanner(status ? status.settings : null);
     renderList();
   } catch (err) {
     console.error('Failed to load games:', err);
     renderError('Could not load tracked games.');
+  }
+}
+
+function updatePausedBanner(settings) {
+  if (!pausedAlertEl) return;
+  if (!settings) {
+    pausedAlertEl.style.display = 'none';
+    return;
+  }
+
+  const now = Date.now();
+  if (settings.circuitBreakerUntil && now < settings.circuitBreakerUntil) {
+    const mins = Math.max(1, Math.round((settings.circuitBreakerUntil - now) / 60000));
+    pausedAlertEl.textContent = `⚠️ Paused: Circuit breaker active (${mins}m remaining).`;
+    pausedAlertEl.style.display = 'block';
+  } else if (settings.requestCountToday >= settings.dailyRequestCap) {
+    pausedAlertEl.textContent = `⚠️ Paused: Daily request cap reached (${settings.requestCountToday}/${settings.dailyRequestCap}).`;
+    pausedAlertEl.style.display = 'block';
+  } else {
+    pausedAlertEl.style.display = 'none';
   }
 }
 

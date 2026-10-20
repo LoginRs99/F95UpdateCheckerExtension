@@ -7,7 +7,7 @@ on:
     branches: [ main ]
 
 jobs:
-  test:
+  unit:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -21,5 +21,26 @@ jobs:
       - name: Syntax check
         run: node scripts/check-syntax.js
 
-      - name: Run test suite
+      - name: Run unit test suite
         run: node --test test/*.test.js
+
+  e2e:
+    needs: unit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Install Playwright Chromium & dependencies
+        run: npx playwright install --with-deps chromium
+
+      - name: Run Playwright E2E tests
+        run: xvfb-run --auto-servernum -- npx playwright test

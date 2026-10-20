@@ -65,10 +65,10 @@ export async function runPoll({ manual = false } = {}) {
   const now = Date.now();
 
   // 1. Check Circuit Breaker
-  if (!manual && settings.circuitBreakerUntil && now < settings.circuitBreakerUntil) {
-    const remainingMins = Math.round((settings.circuitBreakerUntil - now) / 60000);
+  if (settings.circuitBreakerUntil && now < settings.circuitBreakerUntil) {
+    const remainingMins = Math.max(1, Math.round((settings.circuitBreakerUntil - now) / 60000));
     console.warn(`[Poller] Circuit breaker active. Skipping poll. Reset in ${remainingMins}m.`);
-    return { skipped: true, reason: 'circuit_breaker' };
+    return { skipped: true, reason: 'circuit_breaker', remainingMins };
   }
 
   // 2. Check Daily Request Cap
@@ -77,7 +77,7 @@ export async function runPoll({ manual = false } = {}) {
     requestCountToday = 0;
     requestDayTimestamp = now;
   }
-  if (!manual && requestCountToday >= settings.dailyRequestCap) {
+  if (requestCountToday >= settings.dailyRequestCap) {
     console.warn(`[Poller] Daily request cap reached (${requestCountToday}/${settings.dailyRequestCap}). Skipping.`);
     return { skipped: true, reason: 'daily_cap' };
   }
@@ -190,6 +190,8 @@ export async function runPoll({ manual = false } = {}) {
                     stored.installedVersion,
                     item.version
                   );
+                } else {
+                  updatedGame.changelogSnippet = `Updated: ${stored.installedVersion} -> ${item.version}`;
                 }
               } catch (err) {
                 console.warn('[Poller] Non-fatal thread changelog fetch error:', err);
@@ -304,6 +306,10 @@ if (typeof chrome !== 'undefined') {
           }
           case 'POLL_NOW': {
             return await runPoll({ manual: true });
+          }
+          case 'UPDATE_SETTINGS': {
+            const settings = await updateSettings(message.payload);
+            return settings;
           }
           case 'EXPORT_DATA': {
             return await exportData();

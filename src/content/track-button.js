@@ -14,10 +14,7 @@
     const headingEl = document.querySelector('h1.p-title-value') || document.querySelector('h1');
     if (!headingEl) return { title: 'Unknown Title', version: '', prefixes: [] };
 
-    const raw = headingEl.textContent || '';
-    let text = raw.replace(/\s+/g, ' ').trim();
-
-    // Collect labels
+    // Collect labels from live DOM
     const prefixes = [];
     const labelElements = headingEl.querySelectorAll('span.label');
     for (const lbl of labelElements) {
@@ -25,12 +22,19 @@
       if (lblText) prefixes.push(lblText);
     }
 
+    // Clone heading to remove label elements without altering live DOM
+    const clone = headingEl.cloneNode(true);
+    const labelsInClone = clone.querySelectorAll('span.label');
+    for (const l of labelsInClone) l.remove();
+
+    let text = (clone.textContent || '').replace(/\s+/g, ' ').trim();
+
     // Version pattern
     let version = '';
     const vMatch = text.match(/\[(v?[\d][^\]]*|Ch\.[^\]]*|Ep\.[^\]]*|Part\s*[\d][^\]]*)\]/i);
     if (vMatch) version = vMatch[1].trim();
 
-    // Strip prefix brackets from title
+    // Strip any remaining bracketed prefixes from title
     text = text.replace(/^(?:\[[^\]]+\]\s*)+/g, '').trim();
 
     // Strip creator / dev brackets from end

@@ -20,7 +20,7 @@ jobs:
         with:
           node-version: 20
 
-      - name: Run test suite
+      - name: Run unit test suite
         run: |
           node scripts/check-syntax.js
           node --test test/*.test.js
@@ -30,6 +30,14 @@ jobs:
           TAG="${{ github.ref_name }}"
           ZIP_NAME="f95-update-tracker-${TAG}.zip"
           zip -r "$ZIP_NAME" manifest.json icons/ src/
+          echo "=== Verifying zip contents ==="
+          unzip -l "$ZIP_NAME"
+          # Ensure no dev dependencies or test files are in release zip
+          if unzip -l "$ZIP_NAME" | grep -E "node_modules|tests/|test/|fixtures/|\.github|\.git"; then
+            echo "ERROR: Forbidden files found in zip artifact!"
+            exit 1
+          fi
+          echo "Zip package strictly verified: zero dev files present."
           echo "ZIP_NAME=$ZIP_NAME" >> $GITHUB_ENV
 
       - name: Publish GitHub Release

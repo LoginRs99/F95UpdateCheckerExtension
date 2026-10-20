@@ -19,3 +19,7 @@ npm-debug.log*
 *.tar.gz
 dist/
 build/
+
+# Test output
+test-results/
+playwright-report/
