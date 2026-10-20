@@ -24,6 +24,8 @@ import {
   updateBadge
 } from './notify.js';
 
+import { extAPI } from '../compat.js';
+
 export const ALARM_NAME = 'f95_poll_alarm';
 
 /**
@@ -50,10 +52,10 @@ export function calculateBackoffMs(consecutiveFailures = 0) {
  * Ensures alarms are set up with appropriate jitter.
  */
 export async function scheduleNextPoll() {
-  if (typeof chrome === 'undefined' || !chrome.alarms) return;
+  if (!extAPI || !extAPI.alarms) return;
   const settings = await getSettings();
   const delayMinutes = calculateJitterDelay(settings.pollMinutes);
-  await chrome.alarms.create(ALARM_NAME, { delayInMinutes: delayMinutes });
+  await extAPI.alarms.create(ALARM_NAME, { delayInMinutes: delayMinutes });
   console.log(`[Poller] Next poll scheduled in ${delayMinutes} minutes.`);
 }
 
@@ -244,33 +246,40 @@ export async function runPoll({ manual = false } = {}) {
   }
 }
 
-// Service worker listeners
-if (typeof chrome !== 'undefined') {
-  if (chrome.runtime && chrome.runtime.onInstalled) {
-    chrome.runtime.onInstalled.addListener(() => {
+// Background listeners (service worker in Chromium, event page in Firefox)
+if (extAPI) {
+  if (extAPI.runtime && extAPI.runtime.onInstalled) {
+    extAPI.runtime.onInstalled.addListener(() => {
       console.log('[Extension] Installed / Updated.');
       scheduleNextPoll();
       getPendingUpdatesCount().then(updateBadge);
     });
   }
 
-  if (chrome.runtime && chrome.runtime.onStartup) {
-    chrome.runtime.onStartup.addListener(() => {
+  if (extAPI.runtime && extAPI.runtime.onStartup) {
+    extAPI.runtime.onStartup.addListener(async () => {
       console.log('[Extension] Browser started.');
+      // Re-register alarm on startup if missing (persists across event page sleep)
+      if (extAPI.alarms) {
+        const existing = await extAPI.alarms.get(ALARM_NAME);
+        if (!existing) {
+          await scheduleNextPoll();
+        }
+      }
       runPoll();
     });
   }
 
-  if (chrome.alarms && chrome.alarms.onAlarm) {
-    chrome.alarms.onAlarm.addListener((alarm) => {
+  if (extAPI.alarms && extAPI.alarms.onAlarm) {
+    extAPI.alarms.onAlarm.addListener((alarm) => {
       if (alarm.name === ALARM_NAME) {
         runPoll();
       }
     });
   }
 
-  if (chrome.runtime && chrome.runtime.onMessage) {
-    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (extAPI.runtime && extAPI.runtime.onMessage) {
+    extAPI.runtime.onMessage.addListener((message, sender, sendResponse) => {
       const handle = async () => {
         switch (message.type) {
           case 'GET_STATUS': {

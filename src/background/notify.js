@@ -1,20 +1,22 @@
 // src/background/notify.js
 // Dispatches browser notifications and manages extension icon badge count.
 
+import { extAPI } from '../compat.js';
+
 export async function updateBadge(count) {
-  if (typeof chrome === 'undefined' || !chrome.action) return;
+  if (!extAPI || !extAPI.action) return;
 
   try {
     const text = count > 0 ? (count > 99 ? '99+' : String(count)) : '';
-    await chrome.action.setBadgeText({ text });
-    await chrome.action.setBadgeBackgroundColor({ color: '#e53935' });
+    await extAPI.action.setBadgeText({ text });
+    await extAPI.action.setBadgeBackgroundColor({ color: '#e53935' });
   } catch (err) {
     console.warn('[Notify] Failed to update badge:', err);
   }
 }
 
 export async function sendNotification(event) {
-  if (typeof chrome === 'undefined' || !chrome.notifications) return;
+  if (!extAPI || !extAPI.notifications) return;
 
   try {
     let title = 'F95 Update Tracker';
@@ -39,9 +41,9 @@ export async function sendNotification(event) {
         message = event.message || 'Game event detected.';
     }
 
-    await chrome.notifications.create(id, {
+    await extAPI.notifications.create(id, {
       type: 'basic',
-      iconUrl: chrome.runtime.getURL('icons/icon-128.png'),
+      iconUrl: extAPI.runtime.getURL('icons/icon-128.png'),
       title,
       message,
       priority: 2
@@ -52,11 +54,11 @@ export async function sendNotification(event) {
 }
 
 // Register click handler if supported
-if (typeof chrome !== 'undefined' && chrome.notifications && chrome.notifications.onClicked) {
-  chrome.notifications.onClicked.addListener((notificationId) => {
+if (extAPI && extAPI.notifications && extAPI.notifications.onClicked) {
+  extAPI.notifications.onClicked.addListener((notificationId) => {
     const match = notificationId.match(/^f95_event_(\d+)_/);
-    if (match && chrome.tabs) {
-      chrome.tabs.create({ url: `https://f95zone.to/threads/${match[1]}/` });
+    if (match && extAPI.tabs) {
+      extAPI.tabs.create({ url: `https://f95zone.to/threads/${match[1]}/` });
     }
   });
 }

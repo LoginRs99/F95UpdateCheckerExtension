@@ -8,10 +8,18 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { execFileSync } from 'node:child_process';
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const extensionPath = path.resolve(__dirname, '../../');
-const fixturesDir = path.resolve(__dirname, '../../fixtures');
+const rootDir = path.resolve(__dirname, '../../');
+const extensionPath = path.resolve(rootDir, 'dist/chromium');
+const fixturesDir = path.resolve(rootDir, 'fixtures');
+
+// Ensure dist/chromium is built
+if (!fs.existsSync(path.join(extensionPath, 'manifest.json'))) {
+  execFileSync(process.execPath, [path.join(rootDir, 'scripts', 'build.js')], { stdio: 'inherit' });
+}
 
 export const test = base.extend({
   context: async ({}, use) => {

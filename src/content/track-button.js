@@ -3,6 +3,11 @@
 // Uses textContent exclusively for safe DOM rendering.
 
 (function initTrackButton() {
+  const extAPI = (typeof globalThis.browser !== 'undefined' && globalThis.browser.runtime)
+    ? globalThis.browser
+    : (typeof globalThis.chrome !== 'undefined' ? globalThis.chrome : null);
+  if (!extAPI || !extAPI.runtime || !extAPI.runtime.sendMessage) return;
+
   const urlMatch = window.location.pathname.match(/\/threads\/(?:[^\/?#]+\.)?(\d+)/i);
   if (!urlMatch) return;
   const threadId = urlMatch[1];
@@ -58,11 +63,8 @@
     const target = document.querySelector('.p-title') || document.querySelector('h1');
     if (!target) return;
 
-    // Check stored state
-    if (typeof chrome === 'undefined' || !chrome.runtime || !chrome.runtime.sendMessage) return;
-
-    chrome.runtime.sendMessage({ type: 'GET_GAME', id: threadId }, (trackedGame) => {
-      if (chrome.runtime.lastError) return;
+    extAPI.runtime.sendMessage({ type: 'GET_GAME', id: threadId }, (trackedGame) => {
+      if (extAPI.runtime.lastError) return;
 
       const headingData = parseHeadingData();
       renderButton(target, threadId, headingData, trackedGame);
@@ -260,7 +262,7 @@
         notes
       };
 
-      chrome.runtime.sendMessage({ type: 'TRACK_GAME', payload }, (saved) => {
+      extAPI.runtime.sendMessage({ type: 'TRACK_GAME', payload }, (saved) => {
         overlay.remove();
         onSaved(saved);
       });
@@ -279,7 +281,7 @@
       untrackBtn.style.borderRadius = '4px';
       untrackBtn.style.cursor = 'pointer';
       untrackBtn.addEventListener('click', () => {
-        chrome.runtime.sendMessage({ type: 'REMOVE_GAME', id }, () => {
+        extAPI.runtime.sendMessage({ type: 'REMOVE_GAME', id }, () => {
           overlay.remove();
           onSaved(null);
         });

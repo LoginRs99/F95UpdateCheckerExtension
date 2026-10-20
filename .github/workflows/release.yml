@@ -20,30 +20,45 @@ jobs:
         with:
           node-version: 20
 
-      - name: Run unit test suite
+      - name: Build distributions
+        run: node scripts/build.js
+
+      - name: Run verification checks
         run: |
           node scripts/check-syntax.js
           node --test test/*.test.js
 
-      - name: Package extension artifact
+      - name: Package extension artifacts
         run: |
           TAG="${{ github.ref_name }}"
-          ZIP_NAME="f95-update-tracker-${TAG}.zip"
-          zip -r "$ZIP_NAME" manifest.json icons/ src/
-          echo "=== Verifying zip contents ==="
-          unzip -l "$ZIP_NAME"
-          # Ensure no dev dependencies or test files are in release zip
-          if unzip -l "$ZIP_NAME" | grep -E "node_modules|tests/|test/|fixtures/|\.github|\.git"; then
-            echo "ERROR: Forbidden files found in zip artifact!"
+          CHROMIUM_ZIP="f95-update-tracker-chromium-${TAG}.zip"
+          FIREFOX_ZIP="f95-update-tracker-firefox-${TAG}.zip"
+
+          (cd dist/chromium && zip -r "../../$CHROMIUM_ZIP" manifest.json icons/ src/)
+          (cd dist/firefox && zip -r "../../$FIREFOX_ZIP" manifest.json icons/ src/)
+
+          echo "=== Verifying Chromium zip contents ==="
+          unzip -l "$CHROMIUM_ZIP"
+          if unzip -l "$CHROMIUM_ZIP" | grep -E "node_modules|tests/|test/|fixtures/|\.github|\.git"; then
+            echo "ERROR: Forbidden files found in Chromium zip artifact!"
             exit 1
           fi
-          echo "Zip package strictly verified: zero dev files present."
-          echo "ZIP_NAME=$ZIP_NAME" >> $GITHUB_ENV
+
+          echo "=== Verifying Firefox zip contents ==="
+          unzip -l "$FIREFOX_ZIP"
+          if unzip -l "$FIREFOX_ZIP" | grep -E "node_modules|tests/|test/|fixtures/|\.github|\.git"; then
+            echo "ERROR: Forbidden files found in Firefox zip artifact!"
+            exit 1
+          fi
+
+          echo "Zip packages strictly verified: zero dev files present."
+          echo "CHROMIUM_ZIP=$CHROMIUM_ZIP" >> $GITHUB_ENV
+          echo "FIREFOX_ZIP=$FIREFOX_ZIP" >> $GITHUB_ENV
 
       - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "${{ github.ref_name }}" "$ZIP_NAME" \
+          gh release create "${{ github.ref_name }}" "$CHROMIUM_ZIP" "$FIREFOX_ZIP" \
             --title "f95-update-tracker ${{ github.ref_name }}" \
             --generate-notes

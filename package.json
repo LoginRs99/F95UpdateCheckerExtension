@@ -1,16 +1,19 @@
 {
   "name": "f95-update-tracker",
-  "version": "0.1.1",
-  "description": "Lightweight Chromium Manifest V3 extension to track F95zone game updates",
+  "version": "0.2.0",
+  "description": "Lightweight Manifest V3 extension to track F95zone game updates (Chromium and Firefox)",
   "type": "module",
   "private": true,
   "scripts": {
+    "build": "node scripts/build.js",
     "generate-icons": "node scripts/generate-icons.js",
-    "test": "node --test test/*.test.js",
-    "test:e2e": "playwright test",
+    "test": "node scripts/build.js && node --test test/*.test.js",
+    "test:e2e": "node scripts/build.js && playwright test",
+    "lint:firefox": "web-ext lint --source-dir dist/firefox",
     "check": "node scripts/check-syntax.js"
   },
   "devDependencies": {
-    "@playwright/test": "^1.64.1"
+    "@playwright/test": "^1.64.1",
+    "web-ext": "^10.8.0"
   }
 }

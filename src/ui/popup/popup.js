@@ -2,6 +2,8 @@
 // Handles popup UI logic, rendering updates first, then remaining games.
 // Strict textContent rendering only.
 
+import { extAPI } from '../../compat.js';
+
 let allGames = {};
 let searchQuery = '';
 
@@ -17,15 +19,33 @@ const pausedAlertEl = document.getElementById('popup-paused-alert');
 async function loadData() {
   try {
     const [games, status] = await Promise.all([
-      chrome.runtime.sendMessage({ type: 'GET_GAMES' }),
-      chrome.runtime.sendMessage({ type: 'GET_STATUS' })
+      extAPI.runtime.sendMessage({ type: 'GET_GAMES' }),
+      extAPI.runtime.sendMessage({ type: 'GET_STATUS' })
     ]);
     allGames = games || {};
     updatePausedBanner(status ? status.settings : null);
+    await checkHostPermission();
     renderList();
   } catch (err) {
     console.error('Failed to load games:', err);
     renderError('Could not load tracked games.');
+  }
+}
+
+async function checkHostPermission() {
+  if (extAPI && extAPI.permissions && extAPI.permissions.contains) {
+    try {
+      const hasPerm = await extAPI.permissions.contains({ origins: ['https://f95zone.to/*'] });
+      if (!hasPerm) {
+        pausedAlertEl.textContent = '⚠️ Missing permission for f95zone.to. Click here to grant.';
+        pausedAlertEl.style.display = 'block';
+        pausedAlertEl.style.cursor = 'pointer';
+        pausedAlertEl.onclick = async () => {
+          await extAPI.permissions.request({ origins: ['https://f95zone.to/*'] });
+          loadData();
+        };
+      }
+    } catch {}
   }
 }
 
@@ -200,7 +220,7 @@ function createGameCard(game) {
   openBtn.className = 'btn btn-secondary';
   openBtn.textContent = 'Open Thread';
   openBtn.addEventListener('click', () => {
-    chrome.tabs.create({ url: game.url });
+    extAPI.tabs.create({ url: game.url });
   });
   actions.appendChild(openBtn);
 
@@ -211,7 +231,7 @@ function createGameCard(game) {
     markBtn.textContent = 'Mark Installed';
     markBtn.title = 'Set installed version to latest version';
     markBtn.addEventListener('click', async () => {
-      await chrome.runtime.sendMessage({
+      await extAPI.runtime.sendMessage({
         type: 'UPDATE_GAME',
         id: game.id,
         payload: {
@@ -229,7 +249,7 @@ function createGameCard(game) {
   archiveBtn.className = 'btn btn-secondary';
   archiveBtn.textContent = game.archived ? 'Unarchive' : 'Archive';
   archiveBtn.addEventListener('click', async () => {
-    await chrome.runtime.sendMessage({
+    await extAPI.runtime.sendMessage({
       type: 'UPDATE_GAME',
       id: game.id,
       payload: { archived: !game.archived }
@@ -253,7 +273,7 @@ btnCheckNow.addEventListener('click', async () => {
   btnCheckNow.disabled = true;
   btnCheckNow.textContent = 'Checking...';
   try {
-    await chrome.runtime.sendMessage({ type: 'POLL_NOW' });
+    await extAPI.runtime.sendMessage({ type: 'POLL_NOW' });
     await loadData();
   } finally {
     btnCheckNow.disabled = false;
@@ -263,10 +283,10 @@ btnCheckNow.addEventListener('click', async () => {
 
 // Open Library listener
 btnOpenLibrary.addEventListener('click', () => {
-  if (chrome.runtime.openOptionsPage) {
-    chrome.runtime.openOptionsPage();
+  if (extAPI.runtime.openOptionsPage) {
+    extAPI.runtime.openOptionsPage();
   } else {
-    chrome.tabs.create({ url: chrome.runtime.getURL('src/ui/library/library.html') });
+    extAPI.tabs.create({ url: extAPI.runtime.getURL('src/ui/library/library.html') });
   }
 });
 

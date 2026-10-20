@@ -3,14 +3,17 @@
 // Safe, textContent-only rendering with debounced MutationObserver.
 
 (function initHighlights() {
-  if (typeof chrome === 'undefined' || !chrome.runtime || !chrome.runtime.sendMessage) return;
+  const extAPI = (typeof globalThis.browser !== 'undefined' && globalThis.browser.runtime)
+    ? globalThis.browser
+    : (typeof globalThis.chrome !== 'undefined' ? globalThis.chrome : null);
+  if (!extAPI || !extAPI.runtime || !extAPI.runtime.sendMessage) return;
 
   let trackedMap = null;
   let debounceTimer = null;
 
   function fetchAndHighlight() {
-    chrome.runtime.sendMessage({ type: 'GET_GAMES' }, (games) => {
-      if (chrome.runtime.lastError || !games) return;
+    extAPI.runtime.sendMessage({ type: 'GET_GAMES' }, (games) => {
+      if (extAPI.runtime.lastError || !games) return;
       trackedMap = games;
       applyHighlights();
     });

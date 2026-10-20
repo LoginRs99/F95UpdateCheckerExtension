@@ -3,6 +3,7 @@
 // Safe textContent rendering throughout.
 
 import { validateImportPayload } from '../../background/store.js';
+import { extAPI } from '../../compat.js';
 
 let gamesMap = {};
 let selectedIds = new Set();
@@ -32,17 +33,39 @@ const statusBanner = document.getElementById('status-banner');
 async function loadData() {
   try {
     const [games, status] = await Promise.all([
-      chrome.runtime.sendMessage({ type: 'GET_GAMES' }),
-      chrome.runtime.sendMessage({ type: 'GET_STATUS' })
+      extAPI.runtime.sendMessage({ type: 'GET_GAMES' }),
+      extAPI.runtime.sendMessage({ type: 'GET_STATUS' })
     ]);
 
     gamesMap = games || {};
     populateSettings(status ? status.settings : null);
+    await checkHostPermission();
     extractTags();
     renderTable();
   } catch (err) {
     console.error('Failed to load library data:', err);
     showBanner('Error loading data: ' + err.message, 'error');
+  }
+}
+
+async function checkHostPermission() {
+  if (extAPI && extAPI.permissions && extAPI.permissions.contains) {
+    try {
+      const hasPerm = await extAPI.permissions.contains({ origins: ['https://f95zone.to/*'] });
+      if (!hasPerm) {
+        const pausedBanner = document.getElementById('paused-state-banner');
+        if (pausedBanner) {
+          pausedBanner.textContent = '⚠️ Missing host permission for https://f95zone.to/*. Click here to grant access.';
+          pausedBanner.className = 'status-banner error';
+          pausedBanner.style.display = 'block';
+          pausedBanner.style.cursor = 'pointer';
+          pausedBanner.onclick = async () => {
+            await extAPI.permissions.request({ origins: ['https://f95zone.to/*'] });
+            loadData();
+          };
+        }
+      }
+    } catch {}
   }
 }
 
@@ -212,7 +235,7 @@ function renderTable() {
     instSpan.addEventListener('click', () => {
       const newVer = prompt('Edit Installed Version:', game.installedVersion || '');
       if (newVer !== null && newVer.trim() !== game.installedVersion) {
-        chrome.runtime.sendMessage({
+        extAPI.runtime.sendMessage({
           type: 'UPDATE_GAME',
           id: game.id,
           payload: { installedVersion: newVer.trim() }
@@ -263,7 +286,7 @@ function renderTable() {
     tdNotes.addEventListener('click', () => {
       const newNotes = prompt('Edit Notes:', game.notes || '');
       if (newNotes !== null && newNotes !== game.notes) {
-        chrome.runtime.sendMessage({
+        extAPI.runtime.sendMessage({
           type: 'UPDATE_GAME',
           id: game.id,
           payload: { notes: newNotes }
@@ -283,7 +306,7 @@ function renderTable() {
       btnMark.style.marginRight = '4px';
       btnMark.title = 'Mark latest version as installed';
       btnMark.addEventListener('click', async () => {
-        await chrome.runtime.sendMessage({
+        await extAPI.runtime.sendMessage({
           type: 'UPDATE_GAME',
           id: game.id,
           payload: { installedVersion: game.latestVersion, status: 'current' }
@@ -298,7 +321,7 @@ function renderTable() {
     btnArchive.textContent = game.archived ? 'Restore' : 'Archive';
     btnArchive.style.marginRight = '4px';
     btnArchive.addEventListener('click', async () => {
-      await chrome.runtime.sendMessage({
+      await extAPI.runtime.sendMessage({
         type: 'UPDATE_GAME',
         id: game.id,
         payload: { archived: !game.archived }
@@ -313,7 +336,7 @@ function renderTable() {
     btnDel.title = 'Untrack and delete game';
     btnDel.addEventListener('click', async () => {
       if (confirm(`Untrack "${game.title}"?`)) {
-        await chrome.runtime.sendMessage({ type: 'REMOVE_GAME', id: game.id });
+        await extAPI.runtime.sendMessage({ type: 'REMOVE_GAME', id: game.id });
         selectedIds.delete(game.id);
         await loadData();
       }
@@ -349,7 +372,7 @@ selectAllCheckbox.addEventListener('change', () => {
 // Bulk Archive
 btnBulkArchive.addEventListener('click', async () => {
   for (const id of selectedIds) {
-    await chrome.runtime.sendMessage({
+    await extAPI.runtime.sendMessage({
       type: 'UPDATE_GAME',
       id,
       payload: { archived: true }
@@ -364,7 +387,7 @@ btnBulkArchive.addEventListener('click', async () => {
 btnBulkDelete.addEventListener('click', async () => {
   if (!confirm(`Delete ${selectedIds.size} tracked games?`)) return;
   for (const id of selectedIds) {
-    await chrome.runtime.sendMessage({ type: 'REMOVE_GAME', id });
+    await extAPI.runtime.sendMessage({ type: 'REMOVE_GAME', id });
   }
   selectedIds.clear();
   showBanner('Selected games removed.');
@@ -382,7 +405,7 @@ btnRefresh.addEventListener('click', async () => {
   btnRefresh.disabled = true;
   btnRefresh.textContent = 'Checking...';
   try {
-    const res = await chrome.runtime.sendMessage({ type: 'POLL_NOW' });
+    const res = await extAPI.runtime.sendMessage({ type: 'POLL_NOW' });
     if (res && res.trippedCircuitBreaker) {
       showBanner('⚠️ Check failed: Circuit breaker tripped due to forum challenge/rate limit.', 'error');
     } else if (res && res.skipped && res.reason === 'circuit_breaker') {
@@ -409,7 +432,7 @@ btnSaveSettings.addEventListener('click', async () => {
   const pageDepth = parseInt(settingPageDepth.value, 10);
   const dailyCap = parseInt(settingDailyCap.value, 10);
 
-  await chrome.runtime.sendMessage({
+  await extAPI.runtime.sendMessage({
     type: 'UPDATE_SETTINGS',
     payload: {
       pollMinutes: Math.max(15, pollMins || 30),
@@ -423,7 +446,7 @@ btnSaveSettings.addEventListener('click', async () => {
 
 // Export JSON
 btnExportJson.addEventListener('click', async () => {
-  const data = await chrome.runtime.sendMessage({ type: 'EXPORT_DATA' });
+  const data = await extAPI.runtime.sendMessage({ type: 'EXPORT_DATA' });
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -450,7 +473,7 @@ importFileInput.addEventListener('change', async (e) => {
       return;
     }
 
-    const res = await chrome.runtime.sendMessage({
+    const res = await extAPI.runtime.sendMessage({
       type: 'IMPORT_DATA',
       payload: json,
       options: { merge: true }

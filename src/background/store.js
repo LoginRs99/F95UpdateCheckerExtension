@@ -51,8 +51,12 @@ async function getStorageArea() {
     };
   }
 
-  if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-    return chrome.storage.local;
+  const api = (typeof globalThis.browser !== 'undefined' && globalThis.browser.storage)
+    ? globalThis.browser
+    : (typeof globalThis.chrome !== 'undefined' && globalThis.chrome.storage ? globalThis.chrome : null);
+
+  if (api && api.storage && api.storage.local) {
+    return api.storage.local;
   }
 
   // Fallback in-memory

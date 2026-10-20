@@ -1,16 +1,17 @@
 # f95-update-tracker
 
-A lightweight, zero-dependency Chromium Manifest V3 browser extension for tracking your installed versions of [F95zone](https://f95zone.to) games, detecting new updates, and delivering instant notifications.
+A lightweight, zero-dependency browser extension for tracking your installed versions of [F95zone](https://f95zone.to) games, detecting new updates, and delivering instant notifications. Supports **Chromium browsers** (Chrome, Brave, Edge, Vivaldi, Opera) and **Mozilla Firefox & Zen Browser** under Manifest V3.
 
 ---
 
 ## Features
 
+- **Cross-Browser Support**: Native Manifest V3 packages for Chromium (service worker) and Firefox / Zen (ES module event page), sharing a clean, zero-dependency codebase.
 - **One-Click Tracking**: Inject a seamless `+ Track Game` button directly onto F95zone thread pages. Automatically pre-fills the current version and title, allowing you to record your installed version, custom tags, and personal notes.
 - **Smart Update Detection**: Treats game versions as opaque strings (handling arbitrary formats like `v1.0.0`, `Ch.3 Part 2`, `Ep. 1`, `0.85_Fix2`). Triggers updates whenever the forum's latest version differs from your installed version.
 - **Visual Highlights**: Marks tracked games directly on forum index pages, listing views, and Latest Updates tiles (`[TRACKED]` in green, `[UPDATE <ver>]` in red). Seamlessly updates dynamically loaded cards using a `MutationObserver`.
 - **Gentle Forum Footprint**:
-  - Incremental polling via `chrome.alarms` every 30 minutes with randomized jitter.
+  - Incremental polling via alarms every 30 minutes with randomized jitter.
   - Page depth cap and daily request budget cap.
   - Automatic Circuit Breaker with exponential backoff on HTTP 403, 429, or Cloudflare challenge responses.
   - Never runs tight retry loops or hammers the forum.
@@ -32,13 +33,41 @@ A lightweight, zero-dependency Chromium Manifest V3 browser extension for tracki
 
 ## Installation
 
-1. Go to the [Releases](https://github.com/LoginRs99/F95UpdateCheckerExtension/releases) page and download `f95-update-tracker-v0.1.0.zip`.
+### Chromium Browsers (Google Chrome, Brave, Microsoft Edge, Vivaldi, Opera)
+
+1. Go to the [Releases](https://github.com/LoginRs99/F95UpdateCheckerExtension/releases) page and download `f95-update-tracker-chromium-v0.2.0.zip`.
 2. Extract the ZIP archive to a folder on your computer.
-3. Open a Chromium-based browser (Google Chrome, Brave, Microsoft Edge, Vivaldi, Opera).
-4. Navigate to `chrome://extensions/`.
-5. Enable **Developer mode** using the toggle switch in the upper-right corner.
-6. Click the **Load unpacked** button in the upper-left.
-7. Select the unzipped extension directory containing `manifest.json`.
+3. Open your browser and navigate to `chrome://extensions/`.
+4. Enable **Developer mode** using the toggle switch in the upper-right corner.
+5. Click **Load unpacked** in the upper-left.
+6. Select the extracted folder containing `manifest.json`.
+
+---
+
+### Mozilla Firefox & Zen Browser
+
+Firefox and Zen support Manifest V3 with ES module event pages (Firefox 121.0+).
+
+#### Option A: Temporary Add-on (Testing / Development)
+1. Download `f95-update-tracker-firefox-v0.2.0.zip` from [Releases](https://github.com/LoginRs99/F95UpdateCheckerExtension/releases) and extract it (or run `node scripts/build.js` locally to generate `dist/firefox/`).
+2. In Firefox or Zen Browser, navigate to:
+   ```text
+   about:debugging#/runtime/this-firefox
+   ```
+3. Click **Load Temporary Add-on...**
+4. Select `manifest.json` inside the extracted Firefox directory (or `dist/firefox/manifest.json`).
+5. The extension is active immediately.
+
+#### Option B: Permanent Installation (Self-Signed via AMO Unlisted)
+Release artifacts are unsigned (open-source policy: no private developer signing keys in repository). To install permanently:
+1. Download `f95-update-tracker-firefox-v0.2.0.zip`.
+2. Visit the [Mozilla Add-on Developer Hub](https://addons.mozilla.org/developers/addon/submit/upload-unlisted).
+3. Choose **On your own (unlisted)** distribution.
+4. Upload `f95-update-tracker-firefox-v0.2.0.zip`.
+5. Download your signed `.xpi` file once automated checks complete.
+6. Drag and drop the `.xpi` into Firefox/Zen or install via `about:addons` -> Gear icon -> **Install Add-on From File...**.
+
+For full compatibility documentation and the manual testing smoke checklist, see [docs/FIREFOX.md](docs/FIREFOX.md).
 
 ---
 
@@ -49,7 +78,7 @@ A lightweight, zero-dependency Chromium Manifest V3 browser extension for tracki
 | Permission | Purpose |
 | :--- | :--- |
 | `alarms` | Schedules background polling cycles at configured intervals. |
-| `storage` | Stores your tracked games list, installed versions, notes, and preferences locally in `chrome.storage.local`. |
+| `storage` | Stores your tracked games list, installed versions, notes, and preferences locally in extension storage. |
 | `notifications` | Displays desktop notifications when updates or title changes are detected. |
 | `host_permissions: https://f95zone.to/*` | Connects exclusively to the F95zone API and thread pages to check for updates. |
 
@@ -62,7 +91,7 @@ A lightweight, zero-dependency Chromium Manifest V3 browser extension for tracki
 
 ## Known Limitations
 
-- **Browser-Dependent Polling**: As a client-side extension, update polling executes only while your Chromium browser is running. If closed for extended periods, the extension automatically catches up upon browser launch up to your configured page depth cap.
+- **Browser-Dependent Polling**: As a client-side extension, update polling executes only while your browser is running. If closed for extended periods, the extension automatically catches up upon browser launch up to your configured page depth cap.
 - **Markup Changes**: Changelog snippet extraction relies on forum spoiler selectors; if F95zone radically restructures thread markup, snippets may fall back to `Installed -> Latest` while version detection continues uninterrupted via the JSON API.
 
 ---
@@ -72,13 +101,22 @@ A lightweight, zero-dependency Chromium Manifest V3 browser extension for tracki
 Built with pure Vanilla JavaScript ES Modules. Zero bundlers, zero runtime dependencies.
 
 ```bash
-# Run syntax validation across all files
+# Build both distribution targets (dist/chromium and dist/firefox)
+node scripts/build.js
+
+# Run syntax check across all JavaScript files
 node scripts/check-syntax.js
 
-# Run test suite
-node --test test/*.test.js
+# Run unit tests (built-in Node test runner)
+npm test
 
-# Regenerate PNG icons (built-in zlib)
+# Run Chromium E2E tests (Playwright)
+npm run test:e2e
+
+# Lint Firefox target using Mozilla web-ext
+npm run lint:firefox
+
+# Regenerate PNG icons
 node scripts/generate-icons.js
 ```
 

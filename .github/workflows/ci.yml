@@ -18,11 +18,34 @@ jobs:
         with:
           node-version: 20
 
+      - name: Build distributions
+        run: node scripts/build.js
+
       - name: Syntax check
         run: node scripts/check-syntax.js
 
       - name: Run unit test suite
         run: node --test test/*.test.js
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm ci || npm install
+
+      - name: Build distributions
+        run: node scripts/build.js
+
+      - name: Lint Firefox extension with web-ext
+        run: npx web-ext lint --source-dir dist/firefox
 
   e2e:
     needs: unit
@@ -37,7 +60,10 @@ jobs:
           node-version: 20
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci || npm install
+
+      - name: Build distributions
+        run: node scripts/build.js
 
       - name: Install Playwright Chromium & dependencies
         run: npx playwright install --with-deps chromium
