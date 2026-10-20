@@ -24,7 +24,7 @@
 
     const links = document.querySelectorAll('a[href*="/threads/"]');
     for (const link of links) {
-      // Avoid decorating inside our own track button container
+      // Avoid decorating inside our own track button container or modal
       if (link.closest('#f95-ut-track-container') || link.closest('#f95-ut-modal-overlay')) continue;
 
       const href = link.getAttribute('href');
@@ -57,13 +57,14 @@
       badge.setAttribute('data-thread-id', threadId);
       badge.style.display = 'inline-block';
       badge.style.marginRight = '6px';
-      badge.style.padding = '2px 6px';
-      badge.style.borderRadius = '3px';
+      badge.style.padding = '2px 7px';
+      badge.style.borderRadius = '12px';
       badge.style.fontSize = '10px';
       badge.style.fontWeight = '700';
-      badge.style.letterSpacing = '0.5px';
+      badge.style.letterSpacing = '0.04em';
       badge.style.verticalAlign = 'middle';
       badge.style.userSelect = 'none';
+      badge.style.fontFamily = '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", sans-serif';
 
       updateBadgeElement(badge, game);
 
@@ -75,12 +76,16 @@
   function updateBadgeElement(badge, game) {
     if (game.status === 'update') {
       badge.textContent = `UPDATE ${game.latestVersion || ''}`.trim();
-      badge.style.backgroundColor = '#dc2626';
-      badge.style.color = '#ffffff';
+      badge.style.backgroundColor = 'rgba(244, 63, 94, 0.15)';
+      badge.style.color = '#fda4af';
+      badge.style.border = '1px solid rgba(244, 63, 94, 0.4)';
+      badge.style.boxShadow = '0 0 8px rgba(244, 63, 94, 0.25)';
     } else {
       badge.textContent = 'TRACKED';
-      badge.style.backgroundColor = '#059669';
-      badge.style.color = '#ffffff';
+      badge.style.backgroundColor = 'rgba(16, 185, 129, 0.15)';
+      badge.style.color = '#a7f3d0';
+      badge.style.border = '1px solid rgba(16, 185, 129, 0.4)';
+      badge.style.boxShadow = 'none';
     }
   }
 
@@ -105,9 +110,12 @@
     }
   });
 
-  observer.observe(document.body, { childList: true, subtree: true });
+  observer.observe(document.body || document.documentElement, {
+    childList: true,
+    subtree: true
+  });
 
-  // Initial run
+  // Initial scan
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', fetchAndHighlight);
   } else {

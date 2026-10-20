@@ -30,6 +30,12 @@ const importFileInput = document.getElementById('import-file-input');
 const importStatus = document.getElementById('import-status');
 const statusBanner = document.getElementById('status-banner');
 
+const metricTotalEl = document.getElementById('metric-total');
+const metricUpdatesEl = document.getElementById('metric-updates');
+const metricPulseEl = document.getElementById('metric-pulse');
+const metricCurrentEl = document.getElementById('metric-current');
+const metricArchivedEl = document.getElementById('metric-archived');
+
 async function loadData() {
   try {
     const [games, status] = await Promise.all([
@@ -41,6 +47,7 @@ async function loadData() {
     populateSettings(status ? status.settings : null);
     await checkHostPermission();
     extractTags();
+    updateMetrics();
     renderTable();
   } catch (err) {
     console.error('Failed to load library data:', err);
@@ -55,7 +62,7 @@ async function checkHostPermission() {
       if (!hasPerm) {
         const pausedBanner = document.getElementById('paused-state-banner');
         if (pausedBanner) {
-          pausedBanner.textContent = '⚠️ Missing host permission for https://f95zone.to/*. Click here to grant access.';
+          pausedBanner.textContent = 'Missing host permission for https://f95zone.to/*. Click here to grant access.';
           pausedBanner.className = 'status-banner error';
           pausedBanner.style.display = 'block';
           pausedBanner.style.cursor = 'pointer';
@@ -97,13 +104,30 @@ function updatePausedStateBanner(settings) {
   const now = Date.now();
   if (settings.circuitBreakerUntil && now < settings.circuitBreakerUntil) {
     const mins = Math.max(1, Math.round((settings.circuitBreakerUntil - now) / 60000));
-    banner.textContent = `⚠️ Polling paused: Circuit breaker active (anti-hammer protection) for ${mins} more minute(s).`;
+    banner.textContent = `Polling paused: Circuit breaker active (anti-hammer protection) for ${mins} more minute(s).`;
     banner.style.display = 'block';
   } else if (settings.requestCountToday >= settings.dailyRequestCap) {
-    banner.textContent = `⚠️ Polling paused: Daily request cap reached (${settings.requestCountToday}/${settings.dailyRequestCap}). Resets tomorrow.`;
+    banner.textContent = `Polling paused: Daily request cap reached (${settings.requestCountToday}/${settings.dailyRequestCap}). Resets tomorrow.`;
     banner.style.display = 'block';
   } else {
     banner.style.display = 'none';
+  }
+}
+
+function updateMetrics() {
+  const games = Object.values(gamesMap);
+  const total = games.length;
+  const updates = games.filter(g => !g.archived && g.status === 'update').length;
+  const current = games.filter(g => !g.archived && g.status !== 'update').length;
+  const archived = games.filter(g => g.archived).length;
+
+  if (metricTotalEl) metricTotalEl.textContent = String(total);
+  if (metricUpdatesEl) metricUpdatesEl.textContent = String(updates);
+  if (metricCurrentEl) metricCurrentEl.textContent = String(current);
+  if (metricArchivedEl) metricArchivedEl.textContent = String(archived);
+
+  if (metricPulseEl) {
+    metricPulseEl.style.display = updates > 0 ? 'inline-block' : 'none';
   }
 }
 
@@ -117,7 +141,6 @@ function extractTags() {
     }
   }
 
-  // Populate tag filter select
   const currentTag = filterTag.value;
   filterTag.replaceChildren();
   const allOpt = document.createElement('option');
@@ -229,6 +252,7 @@ function renderTable() {
     // 3. Installed Version (editable inline on click)
     const tdInst = document.createElement('td');
     const instSpan = document.createElement('span');
+    instSpan.className = 'ver-chip';
     instSpan.textContent = game.installedVersion || 'none';
     instSpan.style.cursor = 'pointer';
     instSpan.title = 'Click to edit installed version';
@@ -247,7 +271,10 @@ function renderTable() {
 
     // 4. Latest Version
     const tdLatest = document.createElement('td');
-    tdLatest.textContent = game.latestVersion || 'unknown';
+    const latestSpan = document.createElement('span');
+    latestSpan.className = `ver-chip ${game.status === 'update' && !game.archived ? 'highlight-rose' : ''}`;
+    latestSpan.textContent = game.latestVersion || 'unknown';
+    tdLatest.appendChild(latestSpan);
     tr.appendChild(tdLatest);
 
     // 5. Status
@@ -400,18 +427,40 @@ filterStatus.addEventListener('change', renderTable);
 filterTag.addEventListener('change', renderTable);
 sortBy.addEventListener('change', renderTable);
 
+// Metric Cards Click -> Quick Filter
+document.querySelectorAll('.metric-card[data-filter]').forEach(card => {
+  card.addEventListener('click', () => {
+    const f = card.getAttribute('data-filter');
+    if (f) {
+      filterStatus.value = f;
+      renderTable();
+    }
+  });
+});
+
+// Keyboard shortcut: '/' focuses search
+window.addEventListener('keydown', (e) => {
+  if (e.key === '/' && document.activeElement !== filterSearch && !['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) {
+    e.preventDefault();
+    filterSearch.focus();
+  }
+});
+
 // Refresh / Poll Now
 btnRefresh.addEventListener('click', async () => {
   btnRefresh.disabled = true;
-  btnRefresh.textContent = 'Checking...';
+  const labelEl = btnRefresh.querySelector('.btn-label') || btnRefresh;
+  const svgEl = btnRefresh.querySelector('.btn-icon-svg');
+  if (svgEl) svgEl.classList.add('spin');
+  labelEl.textContent = 'Checking...';
   try {
     const res = await extAPI.runtime.sendMessage({ type: 'POLL_NOW' });
     if (res && res.trippedCircuitBreaker) {
-      showBanner('⚠️ Check failed: Circuit breaker tripped due to forum challenge/rate limit.', 'error');
+      showBanner('Check failed: Circuit breaker tripped due to forum challenge/rate limit.', 'error');
     } else if (res && res.skipped && res.reason === 'circuit_breaker') {
-      showBanner('⚠️ Polling paused: Circuit breaker active.', 'error');
+      showBanner('Polling paused: Circuit breaker active.', 'error');
     } else if (res && res.skipped && res.reason === 'daily_cap') {
-      showBanner('⚠️ Polling paused: Daily request cap reached.', 'error');
+      showBanner('Polling paused: Daily request cap reached.', 'error');
     } else if (res && res.error) {
       showBanner(`Check error: ${res.error}`, 'error');
     } else {
@@ -422,7 +471,8 @@ btnRefresh.addEventListener('click', async () => {
     showBanner('Check failed: ' + err.message, 'error');
   } finally {
     btnRefresh.disabled = false;
-    btnRefresh.textContent = 'Check for Updates';
+    if (svgEl) svgEl.classList.remove('spin');
+    labelEl.textContent = 'Check for Updates';
   }
 });
 

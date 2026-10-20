@@ -13,7 +13,6 @@ const footerStatsEl = document.getElementById('footer-stats');
 const searchInput = document.getElementById('popup-search');
 const btnCheckNow = document.getElementById('btn-check-now');
 const btnOpenLibrary = document.getElementById('btn-open-library');
-
 const pausedAlertEl = document.getElementById('popup-paused-alert');
 
 async function loadData() {
@@ -37,7 +36,7 @@ async function checkHostPermission() {
     try {
       const hasPerm = await extAPI.permissions.contains({ origins: ['https://f95zone.to/*'] });
       if (!hasPerm) {
-        pausedAlertEl.textContent = '⚠️ Missing permission for f95zone.to. Click here to grant.';
+        pausedAlertEl.textContent = 'Missing permission for f95zone.to. Click here to grant.';
         pausedAlertEl.style.display = 'block';
         pausedAlertEl.style.cursor = 'pointer';
         pausedAlertEl.onclick = async () => {
@@ -59,10 +58,10 @@ function updatePausedBanner(settings) {
   const now = Date.now();
   if (settings.circuitBreakerUntil && now < settings.circuitBreakerUntil) {
     const mins = Math.max(1, Math.round((settings.circuitBreakerUntil - now) / 60000));
-    pausedAlertEl.textContent = `⚠️ Paused: Circuit breaker active (${mins}m remaining).`;
+    pausedAlertEl.textContent = `Paused: Circuit breaker active (${mins}m remaining).`;
     pausedAlertEl.style.display = 'block';
   } else if (settings.requestCountToday >= settings.dailyRequestCap) {
-    pausedAlertEl.textContent = `⚠️ Paused: Daily request cap reached (${settings.requestCountToday}/${settings.dailyRequestCap}).`;
+    pausedAlertEl.textContent = `Paused: Daily request cap reached (${settings.requestCountToday}/${settings.dailyRequestCap}).`;
     pausedAlertEl.style.display = 'block';
   } else {
     pausedAlertEl.style.display = 'none';
@@ -87,7 +86,7 @@ function renderList() {
   // Header badge
   if (updateCount > 0) {
     badgeCountEl.textContent = String(updateCount);
-    badgeCountEl.style.display = 'inline-block';
+    badgeCountEl.style.display = 'inline-flex';
   } else {
     badgeCountEl.style.display = 'none';
   }
@@ -98,7 +97,7 @@ function renderList() {
   if (totalCount === 0) {
     const empty = document.createElement('div');
     empty.className = 'empty-state';
-    empty.textContent = 'No games tracked yet. Browse F95zone and click "+ Track Game" on any game thread!';
+    empty.textContent = 'No games tracked yet. Browse F95zone and click "+ Track Game" on any thread!';
     gameListEl.appendChild(empty);
     return;
   }
@@ -159,8 +158,9 @@ function renderList() {
 }
 
 function createGameCard(game) {
+  const isUpdate = game.status === 'update' && !game.archived;
   const card = document.createElement('div');
-  card.className = `game-card ${game.status === 'update' && !game.archived ? 'has-update' : ''}`;
+  card.className = `game-card ${isUpdate ? 'has-update' : ''}`;
 
   // Card Header: Title and Status Badge
   const header = document.createElement('div');
@@ -175,8 +175,8 @@ function createGameCard(game) {
   titleLink.title = game.title || '';
 
   const badge = document.createElement('span');
-  badge.className = `game-badge ${game.status === 'update' ? 'badge-update' : 'badge-current'}`;
-  badge.textContent = game.status === 'update' ? 'UPDATE' : 'CURRENT';
+  badge.className = `game-badge ${isUpdate ? 'badge-update' : 'badge-current'}`;
+  badge.textContent = isUpdate ? 'UPDATE' : (game.archived ? 'ARCHIVED' : 'CURRENT');
 
   header.appendChild(titleLink);
   header.appendChild(badge);
@@ -195,7 +195,7 @@ function createGameCard(game) {
   arrow.textContent = '→';
 
   const latestSpan = document.createElement('span');
-  latestSpan.className = `version-latest ${game.status === 'update' ? 'highlight-update' : ''}`;
+  latestSpan.className = `version-latest ${isUpdate ? 'highlight-update' : ''}`;
   latestSpan.textContent = `Latest: ${game.latestVersion || 'unknown'}`;
 
   verRow.appendChild(instSpan);
@@ -271,13 +271,17 @@ searchInput.addEventListener('input', (e) => {
 // Check now button listener
 btnCheckNow.addEventListener('click', async () => {
   btnCheckNow.disabled = true;
-  btnCheckNow.textContent = 'Checking...';
+  const labelEl = btnCheckNow.querySelector('.btn-label') || btnCheckNow;
+  const svgEl = btnCheckNow.querySelector('.btn-icon-svg');
+  if (svgEl) svgEl.classList.add('spin');
+  labelEl.textContent = 'Checking...';
   try {
     await extAPI.runtime.sendMessage({ type: 'POLL_NOW' });
     await loadData();
   } finally {
     btnCheckNow.disabled = false;
-    btnCheckNow.textContent = 'Check Now';
+    if (svgEl) svgEl.classList.remove('spin');
+    labelEl.textContent = 'Check Now';
   }
 });
 

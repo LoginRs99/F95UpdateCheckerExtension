@@ -1,5 +1,5 @@
 // src/content/track-button.js
-// Injects a non-intrusive Track button into F95zone thread pages.
+// Injects a modern Obsidian-styled Track button into F95zone thread pages.
 // Uses textContent exclusively for safe DOM rendering.
 
 (function initTrackButton() {
@@ -80,7 +80,7 @@
       container.style.alignItems = 'center';
       container.style.marginLeft = '12px';
       container.style.verticalAlign = 'middle';
-      container.style.fontFamily = 'system-ui, -apple-system, sans-serif';
+      container.style.fontFamily = '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", sans-serif';
       target.appendChild(container);
     }
 
@@ -91,21 +91,31 @@
     btn.id = 'f95-ut-track-btn';
     btn.style.cursor = 'pointer';
     btn.style.padding = '6px 14px';
-    btn.style.borderRadius = '4px';
-    btn.style.fontSize = '13px';
+    btn.style.borderRadius = '20px';
+    btn.style.fontSize = '12.5px';
     btn.style.fontWeight = '600';
-    btn.style.border = '1px solid transparent';
-    btn.style.transition = 'all 0.15s ease-in-out';
+    btn.style.letterSpacing = '-0.01em';
+    btn.style.transition = 'all 0.15s cubic-bezier(0.16, 1, 0.3, 1)';
+    btn.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.3)';
 
     if (trackedGame) {
       btn.textContent = `✓ Tracked (${trackedGame.installedVersion || 'v?'})`;
-      btn.style.backgroundColor = '#10b981';
-      btn.style.color = '#ffffff';
+      btn.style.backgroundColor = 'rgba(16, 185, 129, 0.15)';
+      btn.style.color = '#a7f3d0';
+      btn.style.border = '1px solid rgba(16, 185, 129, 0.4)';
     } else {
       btn.textContent = '+ Track Game';
-      btn.style.backgroundColor = '#3b82f6';
+      btn.style.background = 'linear-gradient(180deg, #6366f1 0%, #4f46e5 100%)';
       btn.style.color = '#ffffff';
+      btn.style.border = '1px solid rgba(255, 255, 255, 0.15)';
     }
+
+    btn.addEventListener('mouseenter', () => {
+      btn.style.transform = 'translateY(-1px)';
+    });
+    btn.addEventListener('mouseleave', () => {
+      btn.style.transform = 'translateY(0)';
+    });
 
     btn.addEventListener('click', () => {
       showModal(id, headingData, trackedGame, (updatedGame) => {
@@ -127,40 +137,46 @@
     overlay.style.left = '0';
     overlay.style.width = '100vw';
     overlay.style.height = '100vh';
-    overlay.style.backgroundColor = 'rgba(0, 0, 0, 0.65)';
+    overlay.style.backgroundColor = 'rgba(0, 0, 0, 0.75)';
+    overlay.style.backdropFilter = 'blur(10px)';
+    overlay.style.webkitBackdropFilter = 'blur(10px)';
     overlay.style.zIndex = '999999';
     overlay.style.display = 'flex';
     overlay.style.alignItems = 'center';
     overlay.style.justifyContent = 'center';
 
     const card = document.createElement('div');
-    card.style.backgroundColor = '#1f2937';
-    card.style.color = '#f9fafb';
-    card.style.padding = '20px';
-    card.style.borderRadius = '8px';
-    card.style.width = '360px';
-    card.style.boxShadow = '0 10px 25px rgba(0,0,0,0.5)';
-    card.style.fontFamily = 'system-ui, -apple-system, sans-serif';
+    card.style.backgroundColor = '#0c0d10';
+    card.style.color = '#f4f4f5';
+    card.style.padding = '24px';
+    card.style.borderRadius = '14px';
+    card.style.width = '380px';
+    card.style.border = '1px solid rgba(255, 255, 255, 0.09)';
+    card.style.boxShadow = '0 20px 45px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.08)';
+    card.style.fontFamily = '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", sans-serif';
 
     const titleEl = document.createElement('h3');
     titleEl.textContent = trackedGame ? 'Edit Tracked Game' : 'Track This Game';
-    titleEl.style.margin = '0 0 8px 0';
+    titleEl.style.margin = '0 0 6px 0';
     titleEl.style.fontSize = '16px';
-    titleEl.style.fontWeight = '600';
-    titleEl.style.color = '#60a5fa';
+    titleEl.style.fontWeight = '700';
+    titleEl.style.letterSpacing = '-0.02em';
+    titleEl.style.color = '#818cf8';
 
     const gameName = document.createElement('div');
     gameName.textContent = headingData.title;
-    gameName.style.fontSize = '13px';
-    gameName.style.color = '#9ca3af';
-    gameName.style.marginBottom = '14px';
+    gameName.style.fontSize = '12.5px';
+    gameName.style.color = '#a1a1aa';
+    gameName.style.marginBottom = '16px';
 
     // Installed version field
     const verLabel = document.createElement('label');
     verLabel.textContent = 'Your Installed Version:';
     verLabel.style.display = 'block';
-    verLabel.style.fontSize = '12px';
-    verLabel.style.marginBottom = '4px';
+    verLabel.style.fontSize = '11.5px';
+    verLabel.style.fontWeight = '600';
+    verLabel.style.color = '#d4d4d8';
+    verLabel.style.marginBottom = '5px';
 
     const verInput = document.createElement('input');
     verInput.type = 'text';
@@ -168,41 +184,48 @@
     verInput.placeholder = 'e.g. v1.0.0';
     verInput.style.width = '100%';
     verInput.style.boxSizing = 'border-box';
-    verInput.style.padding = '8px';
-    verInput.style.borderRadius = '4px';
-    verInput.style.border = '1px solid #4b5563';
-    verInput.style.backgroundColor = '#111827';
+    verInput.style.padding = '8px 10px';
+    verInput.style.borderRadius = '7px';
+    verInput.style.border = '1px solid rgba(255, 255, 255, 0.1)';
+    verInput.style.backgroundColor = 'rgba(255, 255, 255, 0.04)';
     verInput.style.color = '#ffffff';
     verInput.style.fontSize = '13px';
-    verInput.style.marginBottom = '12px';
+    verInput.style.fontFamily = 'ui-monospace, monospace';
+    verInput.style.marginBottom = '14px';
+    verInput.style.outline = 'none';
 
     // Tags field
     const tagsLabel = document.createElement('label');
     tagsLabel.textContent = 'Tags (comma-separated):';
     tagsLabel.style.display = 'block';
-    tagsLabel.style.fontSize = '12px';
-    tagsLabel.style.marginBottom = '4px';
+    tagsLabel.style.fontSize = '11.5px';
+    tagsLabel.style.fontWeight = '600';
+    tagsLabel.style.color = '#d4d4d8';
+    tagsLabel.style.marginBottom = '5px';
 
     const tagsInput = document.createElement('input');
     tagsInput.type = 'text';
     tagsInput.value = trackedGame && trackedGame.tags ? trackedGame.tags.join(', ') : '';
-    tagsInput.placeholder = 'e.g. playing, renpy, favorite';
+    tagsInput.placeholder = 'e.g. favorite, playing, renpy';
     tagsInput.style.width = '100%';
     tagsInput.style.boxSizing = 'border-box';
-    tagsInput.style.padding = '8px';
-    tagsInput.style.borderRadius = '4px';
-    tagsInput.style.border = '1px solid #4b5563';
-    tagsInput.style.backgroundColor = '#111827';
+    tagsInput.style.padding = '8px 10px';
+    tagsInput.style.borderRadius = '7px';
+    tagsInput.style.border = '1px solid rgba(255, 255, 255, 0.1)';
+    tagsInput.style.backgroundColor = 'rgba(255, 255, 255, 0.04)';
     tagsInput.style.color = '#ffffff';
     tagsInput.style.fontSize = '13px';
-    tagsInput.style.marginBottom = '12px';
+    tagsInput.style.marginBottom = '14px';
+    tagsInput.style.outline = 'none';
 
     // Notes field
     const notesLabel = document.createElement('label');
     notesLabel.textContent = 'Personal Notes:';
     notesLabel.style.display = 'block';
-    notesLabel.style.fontSize = '12px';
-    notesLabel.style.marginBottom = '4px';
+    notesLabel.style.fontSize = '11.5px';
+    notesLabel.style.fontWeight = '600';
+    notesLabel.style.color = '#d4d4d8';
+    notesLabel.style.marginBottom = '5px';
 
     const notesInput = document.createElement('textarea');
     notesInput.rows = 2;
@@ -210,13 +233,26 @@
     notesInput.placeholder = 'Notes (e.g. save file location)';
     notesInput.style.width = '100%';
     notesInput.style.boxSizing = 'border-box';
-    notesInput.style.padding = '8px';
-    notesInput.style.borderRadius = '4px';
-    notesInput.style.border = '1px solid #4b5563';
-    notesInput.style.backgroundColor = '#111827';
+    notesInput.style.padding = '8px 10px';
+    notesInput.style.borderRadius = '7px';
+    notesInput.style.border = '1px solid rgba(255, 255, 255, 0.1)';
+    notesInput.style.backgroundColor = 'rgba(255, 255, 255, 0.04)';
     notesInput.style.color = '#ffffff';
     notesInput.style.fontSize = '13px';
-    notesInput.style.marginBottom = '16px';
+    notesInput.style.marginBottom = '18px';
+    notesInput.style.outline = 'none';
+
+    // Focus glow effects
+    [verInput, tagsInput, notesInput].forEach(inp => {
+      inp.addEventListener('focus', () => {
+        inp.style.borderColor = 'rgba(99, 102, 241, 0.5)';
+        inp.style.boxShadow = '0 0 0 2px rgba(99, 102, 241, 0.2)';
+      });
+      inp.addEventListener('blur', () => {
+        inp.style.borderColor = 'rgba(255, 255, 255, 0.1)';
+        inp.style.boxShadow = 'none';
+      });
+    });
 
     // Action buttons
     const btnRow = document.createElement('div');
@@ -227,26 +263,29 @@
     const cancelBtn = document.createElement('button');
     cancelBtn.type = 'button';
     cancelBtn.textContent = 'Cancel';
-    cancelBtn.style.padding = '6px 12px';
-    cancelBtn.style.backgroundColor = '#4b5563';
-    cancelBtn.style.color = '#ffffff';
-    cancelBtn.style.border = 'none';
-    cancelBtn.style.borderRadius = '4px';
+    cancelBtn.style.padding = '7px 14px';
+    cancelBtn.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
+    cancelBtn.style.color = '#a1a1aa';
+    cancelBtn.style.border = '1px solid rgba(255, 255, 255, 0.09)';
+    cancelBtn.style.borderRadius = '7px';
     cancelBtn.style.cursor = 'pointer';
+    cancelBtn.style.fontSize = '12px';
+    cancelBtn.style.fontWeight = '500';
     cancelBtn.addEventListener('click', () => overlay.remove());
 
     const saveBtn = document.createElement('button');
     saveBtn.type = 'button';
     saveBtn.textContent = trackedGame ? 'Save Changes' : 'Track Game';
-    saveBtn.style.padding = '6px 14px';
-    saveBtn.style.backgroundColor = '#2563eb';
+    saveBtn.style.padding = '7px 16px';
+    saveBtn.style.background = 'linear-gradient(180deg, #6366f1 0%, #4f46e5 100%)';
     saveBtn.style.color = '#ffffff';
-    saveBtn.style.border = 'none';
-    saveBtn.style.borderRadius = '4px';
+    saveBtn.style.border = '1px solid rgba(255, 255, 255, 0.15)';
+    saveBtn.style.borderRadius = '7px';
     saveBtn.style.fontWeight = '600';
+    saveBtn.style.fontSize = '12px';
     saveBtn.style.cursor = 'pointer';
 
-    saveBtn.addEventListener('click', () => {
+    function handleSave() {
       const installedVer = verInput.value.trim();
       const rawTags = tagsInput.value.split(',').map(t => t.trim()).filter(Boolean);
       const notes = notesInput.value.trim();
@@ -259,14 +298,24 @@
         latestVersion: headingData.version || installedVer,
         prefixes: headingData.prefixes,
         tags: rawTags,
-        notes
+        notes: notes,
+        archived: false,
+        addedAt: trackedGame ? trackedGame.addedAt : Date.now(),
+        latestSeenAt: Date.now()
       };
 
-      extAPI.runtime.sendMessage({ type: 'TRACK_GAME', payload }, (saved) => {
+      extAPI.runtime.sendMessage({
+        type: 'TRACK_GAME',
+        payload
+      }, (saved) => {
         overlay.remove();
-        onSaved(saved);
+        if (onSaved) {
+          onSaved(saved);
+        }
       });
-    });
+    }
+
+    saveBtn.addEventListener('click', handleSave);
 
     btnRow.appendChild(cancelBtn);
 
@@ -274,12 +323,14 @@
       const untrackBtn = document.createElement('button');
       untrackBtn.type = 'button';
       untrackBtn.textContent = 'Untrack';
-      untrackBtn.style.padding = '6px 12px';
-      untrackBtn.style.backgroundColor = '#dc2626';
-      untrackBtn.style.color = '#ffffff';
-      untrackBtn.style.border = 'none';
-      untrackBtn.style.borderRadius = '4px';
+      untrackBtn.style.padding = '7px 14px';
+      untrackBtn.style.backgroundColor = 'rgba(239, 68, 68, 0.15)';
+      untrackBtn.style.color = '#fca5a5';
+      untrackBtn.style.border = '1px solid rgba(239, 68, 68, 0.3)';
+      untrackBtn.style.borderRadius = '7px';
       untrackBtn.style.cursor = 'pointer';
+      untrackBtn.style.fontSize = '12px';
+      untrackBtn.style.fontWeight = '500';
       untrackBtn.addEventListener('click', () => {
         extAPI.runtime.sendMessage({ type: 'REMOVE_GAME', id }, () => {
           overlay.remove();
@@ -303,9 +354,26 @@
 
     overlay.appendChild(card);
     document.body.appendChild(overlay);
+
+    // Close on click outside
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) overlay.remove();
+    });
+
+    // Keyboard support: Escape closes, Enter submits (if not multiline textarea)
+    overlay.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        overlay.remove();
+      } else if (e.key === 'Enter' && e.target !== notesInput) {
+        e.preventDefault();
+        handleSave();
+      }
+    });
+
+    verInput.focus();
   }
 
-  // Inject when DOM is ready
+  // Observe page ready or dynamic navigation
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', injectUI);
   } else {
