@@ -82,5 +82,38 @@ test.describe('Extension Popup Track Flow & Version Detection', () => {
     const preview = popupPage.locator('#quick-add-preview');
     await expect(preview).toBeVisible();
     await expect(preview).toContainText('TunnelBound');
+
+    // 4. Test Manual Quick Add for user bug reproduction thread:
+    // https://f95zone.to/threads/littleman-remake-v0-68-mr-rabbit-team.46791/
+    await quickAddInput.fill('https://f95zone.to/threads/littleman-remake-v0-68-mr-rabbit-team.46791/');
+    await resolveBtn.click();
+    await expect(preview).toBeVisible();
+    await expect(preview).toContainText('Littleman Remake');
+
+    // Confirm that detected version dropdown has v0.68, NOT v1.0.0
+    const previewSelect = popupPage.locator('#preview-version-select');
+    await expect(previewSelect).toBeVisible();
+    await expect(previewSelect).toContainText('v0.68');
+
+    const confirmBtn = popupPage.locator('#btn-confirm-add');
+    await confirmBtn.click();
+
+    // Verify saved game record in storage has v0.68
+    await expect.poll(async () => {
+      return await serviceWorker.evaluate(async () => {
+        const data = await chrome.storage.local.get('games');
+        return data.games ? data.games['46791'] : null;
+      });
+    }, { timeout: 5000 }).toBeTruthy();
+
+    const littlemanGame = await serviceWorker.evaluate(async () => {
+      const data = await chrome.storage.local.get('games');
+      return data.games['46791'];
+    });
+
+    expect(littlemanGame).toBeTruthy();
+    expect(littlemanGame.title).toBe('Littleman Remake');
+    expect(littlemanGame.installedVersion).toBe('v0.68');
+    expect(littlemanGame.latestVersion).toBe('v0.68');
   });
 });

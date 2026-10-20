@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import {
   parseThreadIdFromUrl,
   parseThreadHeading,
+  parseThreadSlug,
   detectChanges,
   parseChangelogFromHtml,
   extractVersionsFromHtml
@@ -54,6 +55,64 @@ test('parseThreadHeading parses titles, opaque versions, and prefixes', () => {
   const r4 = parseThreadHeading(h4);
   assert.equal(r4.title, 'CyberCity');
   assert.equal(r4.version, '0.85_Fix2');
+
+  // Case 5: Full document title with trailing | F95zone
+  const h5 = 'Littleman Remake [v0.68] [Mr. Rabbit Team] | F95zone';
+  const r5 = parseThreadHeading(h5);
+  assert.equal(r5.title, 'Littleman Remake');
+  assert.equal(r5.version, 'v0.68');
+
+  // Case 6: Document title with dash prefixes
+  const h6 = 'Completed - VN - Photo Hunt [v0.21.1 Extra] [Moochie] | F95zone';
+  const r6 = parseThreadHeading(h6);
+  assert.equal(r6.title, 'Photo Hunt');
+  assert.equal(r6.version, 'v0.21.1 Extra');
+  assert.deepEqual(r6.prefixes, ['Completed', 'VN']);
+
+  // Case 7: Real saved HTML titles with underscore F95zone suffix and Ren'Py
+  const h7 = "VN - Ren'Py - Grandpa's Lesson [Ch.8 RE v5.0] [NOHope] _ F95zone _ Adult Games _ Comics _ Mods _ Cheats";
+  const r7 = parseThreadHeading(h7);
+  assert.equal(r7.title, "Grandpa's Lesson");
+  assert.equal(r7.version, 'Ch.8 RE v5.0');
+  assert.deepEqual(r7.prefixes, ['VN', "Ren'Py"]);
+
+  const h8 = "Ren'Py - Photo Hunt [v0.21.1 Extra] [Moochie] _ F95zone _ Adult Games _ Comics _ Mods _ Cheats";
+  const r8 = parseThreadHeading(h8);
+  assert.equal(r8.title, 'Photo Hunt');
+  assert.equal(r8.version, 'v0.21.1 Extra');
+  assert.deepEqual(r8.prefixes, ["Ren'Py"]);
+});
+
+test('parseThreadSlug extracts clean title, version, and ID from slugs', () => {
+  // Exact user bug reproduction URL:
+  const r1 = parseThreadSlug('https://f95zone.to/threads/littleman-remake-v0-68-mr-rabbit-team.46791/');
+  assert.equal(r1.id, '46791');
+  assert.equal(r1.title, 'Littleman Remake');
+  assert.equal(r1.version, 'v0.68');
+
+  // Multi-segment version with extra tag
+  const r2 = parseThreadSlug('https://f95zone.to/threads/photo-hunt-v0-21-1-extra-moochie.54321/');
+  assert.equal(r2.id, '54321');
+  assert.equal(r2.title, 'Photo Hunt');
+  assert.equal(r2.version, 'v0.21.1 Extra');
+
+  // Episodic / Chapter versioning with pagination
+  const r3 = parseThreadSlug('https://f95zone.to/threads/grandpas-lesson-ch-8-re-v5-0-nohope.285411/page-2');
+  assert.equal(r3.id, '285411');
+  assert.equal(r3.title, 'Grandpas Lesson');
+  assert.equal(r3.version, 'Ch.8 RE v5.0');
+
+  // Slug without version
+  const r4 = parseThreadSlug('https://f95zone.to/threads/uncharted-lands.999/');
+  assert.equal(r4.id, '999');
+  assert.equal(r4.title, 'Uncharted Lands');
+  assert.equal(r4.version, '');
+
+  // Raw numeric string without slug
+  const r5 = parseThreadSlug('46791');
+  assert.equal(r5.id, '46791');
+  assert.equal(r5.title, 'Thread #46791');
+  assert.equal(r5.version, '');
 });
 
 test('detectChanges detects opaque version changes and triggers updates', () => {

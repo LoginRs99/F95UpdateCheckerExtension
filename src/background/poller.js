@@ -18,7 +18,9 @@ import {
   detectChanges,
   parseChangelogFromHtml,
   extractVersionsFromHtml,
-  parseThreadIdFromUrl
+  parseThreadIdFromUrl,
+  parseThreadHeading,
+  parseThreadSlug
 } from './detector.js';
 
 import {
@@ -248,6 +250,124 @@ export async function runPoll({ manual = false } = {}) {
   }
 }
 
+/**
+ * Multi-layer thread metadata resolver:
+ * 1. URL slug parser (clean title and version from URL without network).
+ * 2. Open browser tabs (exact page title and live DOM changelog versions).
+ * 3. Latest updates API search (bypasses Cloudflare 403 on HTML).
+ * 4. Direct HTML fetch with session credentials.
+ */
+export async function resolveThreadMetadata(rawInput) {
+  const inputStr = String(rawInput || '').trim();
+  const id = parseThreadIdFromUrl(inputStr);
+  if (!id) return { error: 'Please enter a valid F95zone thread URL or ID.' };
+
+  const existing = await getGame(id);
+  const settings = await getSettings();
+
+  // Layer 1: Parse slug from input if it was a URL
+  const slugData = parseThreadSlug(inputStr);
+  let title = (slugData && slugData.title && !slugData.title.startsWith('Thread #'))
+    ? slugData.title
+    : `Thread #${id}`;
+  let version = (slugData && slugData.version) ? slugData.version : '';
+  let prefixes = [];
+  let versions = version ? [version] : [];
+
+  // Layer 2: Inspect open browser tabs for this thread
+  if (extAPI && extAPI.tabs && extAPI.tabs.query) {
+    try {
+      const openTabs = await extAPI.tabs.query({});
+      const matchingTab = openTabs.find(t => t.url && parseThreadIdFromUrl(t.url) === id);
+      if (matchingTab) {
+        if (matchingTab.title) {
+          const heading = parseThreadHeading(matchingTab.title);
+          if (heading.title) title = heading.title;
+          if (heading.version) version = heading.version;
+          if (Array.isArray(heading.prefixes) && heading.prefixes.length > 0) prefixes = heading.prefixes;
+        }
+
+        // Try getting DOM info from content script
+        try {
+          const domInfo = await extAPI.tabs.sendMessage(matchingTab.id, { type: 'GET_PAGE_THREAD_INFO' });
+          if (domInfo) {
+            if (domInfo.title) title = domInfo.title;
+            if (domInfo.currentVersion) version = domInfo.currentVersion;
+            if (Array.isArray(domInfo.prefixes) && domInfo.prefixes.length > 0) prefixes = domInfo.prefixes;
+            if (Array.isArray(domInfo.versions) && domInfo.versions.length > 0) versions = domInfo.versions;
+          }
+        } catch {}
+      }
+    } catch {}
+  }
+
+  // Layer 3: Query latest_data.php API (never blocked by Cloudflare)
+  const searchQuery = (title && !title.startsWith('Thread #')) ? title.replace(/[\[\]]/g, '').trim() : '';
+  if (searchQuery) {
+    try {
+      const apiUrl = `https://${settings.domain}/sam/latest_alpha/latest_data.php?cmd=list&cat=games&search=${encodeURIComponent(searchQuery)}`;
+      const apiRes = await fetch(apiUrl, {
+        headers: { 'Accept': 'application/json' }
+      });
+      if (apiRes.ok) {
+        const json = await apiRes.json();
+        if (json && json.msg && Array.isArray(json.msg.data)) {
+          const matchItem = json.msg.data.find(d => String(d.thread_id) === String(id));
+          if (matchItem) {
+            if (matchItem.title) title = matchItem.title;
+            if (matchItem.version) version = matchItem.version;
+            if (Array.isArray(matchItem.prefixes)) prefixes = matchItem.prefixes;
+          }
+        }
+      }
+    } catch {}
+  }
+
+  // Layer 4: Direct HTML fetch
+  try {
+    const res = await fetch(`https://${settings.domain}/threads/${id}/`, {
+      credentials: 'include',
+      headers: { 'Accept': 'text/html' }
+    });
+    if (res.url && res.url !== `https://${settings.domain}/threads/${id}/`) {
+      const redirectedSlug = parseThreadSlug(res.url);
+      if (redirectedSlug && redirectedSlug.title && !redirectedSlug.title.startsWith('Thread #')) {
+        if (!title || title.startsWith('Thread #')) title = redirectedSlug.title;
+        if (!version && redirectedSlug.version) version = redirectedSlug.version;
+      }
+    }
+    if (res.ok) {
+      const html = await res.text();
+      if (!html.includes('Just a moment...') && !html.includes('challenges.cloudflare.com')) {
+        const titleMatch = html.match(/<h1[^>]*class="[^"]*p-title-value[^"]*"[^>]*>([\s\S]*?)<\/h1>/i) ||
+                           html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
+        if (titleMatch) {
+          const heading = parseThreadHeading(titleMatch[1].replace(/<[^>]+>/g, '').trim());
+          if (heading.title && !heading.title.toLowerCase().includes('just a moment')) title = heading.title;
+          if (heading.version) version = heading.version;
+          if (Array.isArray(heading.prefixes) && heading.prefixes.length > 0) prefixes = heading.prefixes;
+        }
+        const domVers = extractVersionsFromHtml(html, version);
+        if (domVers.length > 0) versions = domVers;
+      }
+    }
+  } catch {}
+
+  // Ensure version is in versions list
+  if (version && !versions.includes(version)) {
+    versions.unshift(version);
+  }
+
+  return {
+    id,
+    title,
+    latestVersion: version,
+    versions: versions.length > 0 ? versions : (version ? [version] : []),
+    existingGame: existing || null,
+    prefixes
+  };
+}
+
 // Background listeners (service worker in Chromium, event page in Firefox)
 if (extAPI) {
   if (extAPI.runtime && extAPI.runtime.onInstalled) {
@@ -304,47 +424,11 @@ if (extAPI) {
             return game;
           }
           case 'RESOLVE_THREAD': {
-            const id = parseThreadIdFromUrl(String(message.input || ''));
-            if (!id) return { error: 'Please enter a valid F95zone thread URL or ID.' };
-
-            const existing = await getGame(id);
-            const settings = await getSettings();
-            let title = `Thread #${id}`;
-            let version = '';
-            let prefixes = [];
-            let versions = [];
-
-            try {
-              const res = await fetch(`https://${settings.domain}/threads/${id}/`, {
-                headers: { 'Accept': 'text/html' }
-              });
-              if (res.ok) {
-                const html = await res.text();
-                const titleMatch = html.match(/<h1[^>]*class="[^"]*p-title-value[^"]*"[^>]*>([\s\S]*?)<\/h1>/i) ||
-                                   html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
-                if (titleMatch) {
-                  const cleanHeading = titleMatch[1].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
-                  const vMatch = cleanHeading.match(/\[(v?[\d][^\]]*|Ch\.[^\]]*|Ep\.[^\]]*|Part\s*[\d][^\]]*)\]/i);
-                  if (vMatch) version = vMatch[1].trim();
-                  title = cleanHeading.replace(/^(?:\[[^\]]+\]\s*)+/g, '').replace(/\s*\[[^\]]+\]\s*$/g, '').trim() || title;
-                }
-                versions = extractVersionsFromHtml(html, version);
-              }
-            } catch (err) {
-              console.warn('[Poller] Resolve thread fetch error:', err.message);
-            }
-
-            return {
-              id,
-              title,
-              latestVersion: version || 'v1.0.0',
-              versions: versions.length > 0 ? versions : [version || 'v1.0.0'],
-              existingGame: existing || null,
-              prefixes
-            };
+            return await resolveThreadMetadata(message.input);
           }
           case 'QUICK_ADD_GAME': {
-            const id = parseThreadIdFromUrl(String(message.input || ''));
+            const raw = String(message.input || '').trim();
+            const id = parseThreadIdFromUrl(raw);
             if (!id) return { error: 'Please enter a valid F95zone thread URL or ID.' };
 
             const existing = await getGame(id);
@@ -352,45 +436,38 @@ if (extAPI) {
               return { game: existing, alreadyTracked: true };
             }
 
-            const settings = await getSettings();
-            let title = message.title || `Thread #${id}`;
-            let version = message.latestVersion || 'v1.0.0';
+            let title = message.title;
+            let latestVersion = message.latestVersion;
             let prefixes = message.prefixes || [];
             let versions = [];
 
-            if (!message.title || !message.latestVersion) {
-              try {
-                const res = await fetch(`https://${settings.domain}/threads/${id}/`, {
-                  headers: { 'Accept': 'text/html' }
-                });
-                if (res.ok) {
-                  const html = await res.text();
-                  const titleMatch = html.match(/<h1[^>]*class="[^"]*p-title-value[^"]*"[^>]*>([\s\S]*?)<\/h1>/i) ||
-                                     html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
-                  if (titleMatch) {
-                    const cleanHeading = titleMatch[1].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
-                    const vMatch = cleanHeading.match(/\[(v?[\d][^\]]*|Ch\.[^\]]*|Ep\.[^\]]*|Part\s*[\d][^\]]*)\]/i);
-                    if (vMatch) version = vMatch[1].trim();
-                    title = cleanHeading.replace(/^(?:\[[^\]]+\]\s*)+/g, '').replace(/\s*\[[^\]]+\]\s*$/g, '').trim() || title;
-                  }
-                  versions = extractVersionsFromHtml(html, version);
-                }
-              } catch (err) {
-                console.warn('[Poller] Quick add thread fetch error:', err.message);
+            if (!title || !latestVersion) {
+              const meta = await resolveThreadMetadata(raw);
+              if (meta && !meta.error) {
+                title = title || meta.title;
+                latestVersion = latestVersion || meta.latestVersion;
+                prefixes = (prefixes.length > 0) ? prefixes : meta.prefixes;
+                versions = meta.versions || [];
               }
             }
 
+            const finalTitle = title || `Thread #${id}`;
+            const finalLatestVersion = latestVersion || '';
             const installedVersion = (message.installedVersion !== undefined && message.installedVersion !== '')
               ? message.installedVersion
-              : version;
-            const status = (installedVersion !== version) ? 'update' : 'current';
+              : (finalLatestVersion || '');
 
+            const status = (installedVersion && finalLatestVersion && installedVersion !== finalLatestVersion)
+              ? 'update'
+              : 'current';
+
+            const settings = await getSettings();
             const game = await saveGame({
               id,
               url: `https://${settings.domain}/threads/${id}/`,
-              title,
+              title: finalTitle,
               installedVersion,
-              latestVersion: version,
+              latestVersion: finalLatestVersion || installedVersion,
               prefixes,
               tags: Array.isArray(message.tags) ? message.tags : [],
               notes: message.notes || '',

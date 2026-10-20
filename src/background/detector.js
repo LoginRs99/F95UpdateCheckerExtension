@@ -11,7 +11,7 @@ export const KNOWN_PREFIX_LABELS = {
 };
 
 /**
- * Extracts thread ID from an F95zone URL or path.
+ * Extracts thread ID from an F95zone URL, path, or raw numeric string.
  * Supports /threads/<slug>.<id>/, /threads/<id>/, and full URLs.
  */
 export function parseThreadIdFromUrl(url) {
@@ -23,6 +23,57 @@ export function parseThreadIdFromUrl(url) {
 }
 
 /**
+ * Parses XenForo thread slugs to recover title and version when HTML fetch is unavailable.
+ * e.g. "littleman-remake-v0-68-mr-rabbit-team.46791" -> { id: "46791", title: "Littleman Remake", version: "v0.68" }
+ */
+export function parseThreadSlug(urlOrSlug) {
+  if (!urlOrSlug || typeof urlOrSlug !== 'string') return null;
+  const str = urlOrSlug.trim();
+  const match = str.match(/\/threads\/(?:([^\/?#]+)\.)?(\d+)/i) || str.match(/^(?:([^\/?#]+)\.)?(\d+)$/);
+
+  let slug = '';
+  let id = '';
+
+  if (match) {
+    slug = match[1] || '';
+    id = match[2];
+  } else {
+    slug = str.replace(/^\/|\/$/g, '');
+  }
+
+  if (!slug) return id ? { id, title: `Thread #${id}`, version: '' } : null;
+
+  let version = '';
+  let title = '';
+
+  // Match version block within slug: e.g. -v0-68-, -v0-21-1-extra-, -ch-8-re-v5-0-
+  const vRegex = /(?:^|-)(v\d+(?:-\d+)*(?:-(?:extra|final|patch|hotfix|re-v?\d+(?:-\d+)*))*|ch-\d+(?:-part-\d+)?(?:-re-v?\d+(?:-\d+)*)?|ep-\d+(?:-\d+)?|\d+(?:-\d+)+)(?:-|$)/i;
+  const vMatch = slug.match(vRegex);
+
+  if (vMatch) {
+    const rawVer = vMatch[1];
+    version = rawVer
+      .replace(/-re-v/i, ' RE v')
+      .replace(/-extra/i, ' Extra')
+      .replace(/-final/i, ' Final')
+      .replace(/-patch/i, ' Patch')
+      .replace(/-hotfix/i, ' Hotfix')
+      .replace(/-part-/i, ' Part ')
+      .replace(/^ch-/i, 'Ch.')
+      .replace(/^ep-/i, 'Ep.')
+      .replace(/(\d+)-+(\d+)/g, '$1.$2')
+      .replace(/(\d+)-+(\d+)/g, '$1.$2');
+
+    const beforeVer = slug.slice(0, vMatch.index).replace(/[-_]+/g, ' ').trim();
+    title = beforeVer ? beforeVer.replace(/\b\w/g, c => c.toUpperCase()) : 'Game';
+  } else {
+    title = slug.replace(/[-_]+/g, ' ').trim().replace(/\b\w/g, c => c.toUpperCase());
+  }
+
+  return { id, title, version };
+}
+
+/**
  * Parses thread heading text to extract clean title, version, and prefixes.
  * Example: "[Completed] [VN] My Game [v1.0.5] [StudioName]"
  */
@@ -31,7 +82,8 @@ export function parseThreadHeading(rawHeading) {
     return { title: '', version: '', prefixes: [] };
   }
 
-  let text = rawHeading.replace(/\s+/g, ' ').trim();
+  // Strip page title suffix: | F95zone ... or _ F95zone ... or - F95zone ...
+  let text = rawHeading.replace(/\s*[-|_]\s*F95zone.*$/i, '').replace(/\s+/g, ' ').trim();
   const prefixes = [];
 
   // Match leading bracketed tags or label spans, e.g. [Completed] [VN]
@@ -39,7 +91,6 @@ export function parseThreadHeading(rawHeading) {
   const leadingMatch = text.match(leadingBracketsRegex);
   if (leadingMatch) {
     const bracketBlocks = [...text.matchAll(/\[([^\]]+)\]/g)];
-    // Check if these appear at the beginning of the string
     let currentIdx = 0;
     for (const b of bracketBlocks) {
       if (b.index === currentIdx) {
@@ -51,6 +102,14 @@ export function parseThreadHeading(rawHeading) {
       }
     }
     text = text.slice(currentIdx).trim();
+  }
+
+  // Also match leading prefix tags with dashes, e.g. 'Completed - VN - Ren\'Py - '
+  const dashPrefixMatch = text.match(/^(?:(Completed|Abandoned|On Hold|O\/H|VN|Ren'?Py|Unity|Unreal(?: Engine)?|RPGM|Wolf RPG|Action|HTML|Flash|Java|QSP|Others|Mod)\s*-\s*)+/i);
+  if (dashPrefixMatch) {
+    const parts = dashPrefixMatch[0].split('-').map(p => p.trim()).filter(Boolean);
+    prefixes.push(...parts);
+    text = text.slice(dashPrefixMatch[0].length).trim();
   }
 
   // Look for version pattern inside brackets anywhere in the remainder:

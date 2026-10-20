@@ -4,6 +4,7 @@
 // Strict textContent rendering only.
 
 import { extAPI } from '../../compat.js';
+import { parseThreadHeading, parseThreadSlug, parseThreadIdFromUrl } from '../../background/detector.js';
 
 let allGames = {};
 let searchQuery = '';
@@ -91,6 +92,43 @@ function updatePausedBanner(settings) {
   }
 }
 
+function isF95ThreadUrl(url) {
+  if (!url || typeof url !== 'string') return false;
+  return Boolean(parseThreadIdFromUrl(url));
+}
+
+async function findF95Tab() {
+  try {
+    // 1. Check all active tabs across all windows first
+    const activeTabs = await extAPI.tabs.query({ active: true });
+    if (Array.isArray(activeTabs)) {
+      const activeMatch = activeTabs.find(t => isF95ThreadUrl(t.url));
+      if (activeMatch) return activeMatch;
+    }
+
+    // 2. Check last focused window active tab
+    const [focusedActive] = await extAPI.tabs.query({ active: true, lastFocusedWindow: true });
+    if (focusedActive && isF95ThreadUrl(focusedActive.url)) return focusedActive;
+
+    // 3. Check any tab in last focused window
+    const focusedTabs = await extAPI.tabs.query({ lastFocusedWindow: true });
+    if (Array.isArray(focusedTabs)) {
+      const match = focusedTabs.find(t => isF95ThreadUrl(t.url));
+      if (match) return match;
+    }
+
+    // 4. Fallback: check all open tabs across all windows
+    const allTabs = await extAPI.tabs.query({});
+    if (Array.isArray(allTabs)) {
+      const match = allTabs.find(t => isF95ThreadUrl(t.url));
+      if (match) return match;
+    }
+  } catch (err) {
+    console.warn('Tab discovery error:', err);
+  }
+  return null;
+}
+
 /**
  * Checks if user is currently on an F95zone thread tab.
  * If yes, offers 1-click tracking with version dropdown right in the popup!
@@ -99,53 +137,69 @@ async function checkActiveTab() {
   if (!activeTabBannerEl || !extAPI.tabs || !extAPI.tabs.query) return;
 
   try {
-    let targetTab = null;
-    const tabs = await extAPI.tabs.query({ active: true, currentWindow: true });
-    if (tabs && tabs[0] && tabs[0].url && tabs[0].url.includes('f95zone.to/threads/')) {
-      targetTab = tabs[0];
-    } else {
-      // Fallback: check other open tabs for an f95zone thread
-      const f95Tabs = await extAPI.tabs.query({ url: '*://*.f95zone.to/threads/*' });
-      if (f95Tabs && f95Tabs.length > 0) {
-        targetTab = f95Tabs[f95Tabs.length - 1];
-      }
-    }
-
+    const targetTab = await findF95Tab();
     if (!targetTab || !targetTab.url) {
       activeTabBannerEl.style.display = 'none';
       activeTabInfo = null;
       return;
     }
 
-    const match = targetTab.url.match(/\/threads\/(?:[^\/?#]+\.)?(\d+)/i);
-    if (!match) {
+    const threadId = parseThreadIdFromUrl(targetTab.url);
+    if (!threadId) {
       activeTabBannerEl.style.display = 'none';
       activeTabInfo = null;
       return;
     }
 
-    const threadId = match[1];
+    // Layer A: Parse heading directly from targetTab.title and slug from targetTab.url
+    const headingData = parseThreadHeading(targetTab.title || '');
+    const slugData = parseThreadSlug(targetTab.url || '');
 
-    // Try messaging content script for instant DOM-based info
-    let info = null;
+    let title = (headingData && headingData.title && !headingData.title.startsWith('Thread #'))
+      ? headingData.title
+      : (slugData && slugData.title ? slugData.title : `Thread #${threadId}`);
+    let currentVersion = (headingData && headingData.version)
+      ? headingData.version
+      : (slugData && slugData.version ? slugData.version : '');
+    let prefixes = (headingData && headingData.prefixes) ? headingData.prefixes : [];
+    let versions = currentVersion ? [currentVersion] : [];
+
+    // Layer B: Try messaging content script for rich DOM info & previous changelog versions
     try {
-      info = await extAPI.tabs.sendMessage(targetTab.id, { type: 'GET_PAGE_THREAD_INFO' });
+      const domInfo = await extAPI.tabs.sendMessage(targetTab.id, { type: 'GET_PAGE_THREAD_INFO' });
+      if (domInfo) {
+        if (domInfo.title) title = domInfo.title;
+        if (domInfo.currentVersion) currentVersion = domInfo.currentVersion;
+        if (Array.isArray(domInfo.prefixes) && domInfo.prefixes.length > 0) prefixes = domInfo.prefixes;
+        if (Array.isArray(domInfo.versions) && domInfo.versions.length > 0) versions = domInfo.versions;
+      }
     } catch {}
 
-    // Fallback: resolve via background service worker
-    if (!info) {
-      info = await extAPI.runtime.sendMessage({ type: 'RESOLVE_THREAD', input: targetTab.url });
-      if (info) {
-        info.threadId = info.id;
-        info.currentVersion = info.latestVersion;
-        info.url = targetTab.url;
-      }
+    // Layer C: Query background resolver if version is still missing
+    if (!currentVersion || versions.length <= 1) {
+      try {
+        const meta = await extAPI.runtime.sendMessage({ type: 'RESOLVE_THREAD', input: targetTab.url });
+        if (meta && !meta.error) {
+          if (meta.title && (!title || title.startsWith('Thread #'))) title = meta.title;
+          if (meta.latestVersion && !currentVersion) currentVersion = meta.latestVersion;
+          if (Array.isArray(meta.versions) && meta.versions.length > versions.length) versions = meta.versions;
+          if (Array.isArray(meta.prefixes) && meta.prefixes.length > 0) prefixes = meta.prefixes;
+        }
+      } catch {}
     }
 
-    if (!info) {
-      activeTabBannerEl.style.display = 'none';
-      return;
+    if (currentVersion && !versions.includes(currentVersion)) {
+      versions.unshift(currentVersion);
     }
+
+    const info = {
+      threadId,
+      title,
+      currentVersion,
+      versions: versions.length > 0 ? versions : (currentVersion ? [currentVersion] : []),
+      prefixes,
+      url: targetTab.url
+    };
 
     activeTabInfo = info;
     renderActiveTabBanner(threadId, info);
@@ -261,25 +315,35 @@ function renderActiveTabBanner(threadId, info) {
 
   const availableVersions = (info.versions && info.versions.length > 0)
     ? info.versions
-    : [info.currentVersion || 'v1.0.0'];
+    : (info.currentVersion ? [info.currentVersion] : []);
 
-  for (let i = 0; i < availableVersions.length; i++) {
-    const v = availableVersions[i];
-    const opt = document.createElement('option');
-    opt.value = v;
-    opt.textContent = (i === 0) ? `${v} (Latest)` : v;
-    select.appendChild(opt);
+  if (availableVersions.length > 0) {
+    select.style.display = 'inline-block';
+    customInput.style.display = 'none';
+    for (let i = 0; i < availableVersions.length; i++) {
+      const v = availableVersions[i];
+      const opt = document.createElement('option');
+      opt.value = v;
+      opt.textContent = (i === 0) ? `${v} (Latest)` : v;
+      select.appendChild(opt);
+    }
+    const customOpt = document.createElement('option');
+    customOpt.value = '__custom__';
+    customOpt.textContent = 'Custom / Other...';
+    select.appendChild(customOpt);
+  } else {
+    // If no versions were detected, display the text input directly
+    select.style.display = 'none';
+    customInput.style.display = 'inline-block';
+    customInput.value = '';
+    customInput.placeholder = 'Enter version (e.g. v0.68)';
   }
-
-  const customOpt = document.createElement('option');
-  customOpt.value = '__custom__';
-  customOpt.textContent = 'Custom / Other...';
-  select.appendChild(customOpt);
 
   select.addEventListener('change', () => {
     if (select.value === '__custom__') {
       select.style.display = 'none';
       customInput.style.display = 'inline-block';
+      customInput.value = '';
       customInput.focus();
     }
   });
@@ -298,15 +362,15 @@ function renderActiveTabBanner(threadId, info) {
     trackBtn.disabled = true;
     trackBtn.textContent = 'Saving...';
     try {
-      const selectedVersion = (select.value === '__custom__')
-        ? (customInput.value.trim() || info.currentVersion || 'v1.0.0')
+      const selectedVersion = (select.style.display === 'none' || select.value === '__custom__')
+        ? (customInput.value.trim() || info.currentVersion || '')
         : select.value;
 
       await extAPI.runtime.sendMessage({
         type: 'QUICK_ADD_GAME',
         input: info.url || `https://f95zone.to/threads/${threadId}/`,
         title: info.title,
-        latestVersion: info.currentVersion || 'v1.0.0',
+        latestVersion: info.currentVersion || selectedVersion,
         installedVersion: selectedVersion,
         prefixes: info.prefixes || []
       });
@@ -683,22 +747,36 @@ btnQuickAddResolve.addEventListener('click', async () => {
     previewTitle.textContent = res.title;
 
     previewVersionSelect.replaceChildren();
-    for (let i = 0; i < res.versions.length; i++) {
-      const v = res.versions[i];
-      const opt = document.createElement('option');
-      opt.value = v;
-      opt.textContent = (i === 0) ? `${v} (Latest)` : v;
-      previewVersionSelect.appendChild(opt);
+    const available = (res.versions && res.versions.length > 0)
+      ? res.versions
+      : (res.latestVersion ? [res.latestVersion] : []);
+
+    if (available.length > 0) {
+      previewVersionSelect.style.display = 'inline-block';
+      previewVersionCustom.style.display = 'none';
+      for (let i = 0; i < available.length; i++) {
+        const v = available[i];
+        const opt = document.createElement('option');
+        opt.value = v;
+        opt.textContent = (i === 0) ? `${v} (Latest)` : v;
+        previewVersionSelect.appendChild(opt);
+      }
+      const customOpt = document.createElement('option');
+      customOpt.value = '__custom__';
+      customOpt.textContent = 'Custom / Other...';
+      previewVersionSelect.appendChild(customOpt);
+    } else {
+      previewVersionSelect.style.display = 'none';
+      previewVersionCustom.style.display = 'inline-block';
+      previewVersionCustom.value = res.latestVersion || '';
+      previewVersionCustom.placeholder = 'Enter version (e.g. v0.68)';
     }
-    const customOpt = document.createElement('option');
-    customOpt.value = '__custom__';
-    customOpt.textContent = 'Custom / Other...';
-    previewVersionSelect.appendChild(customOpt);
 
     previewVersionSelect.onchange = () => {
       if (previewVersionSelect.value === '__custom__') {
         previewVersionSelect.style.display = 'none';
         previewVersionCustom.style.display = 'inline-block';
+        previewVersionCustom.value = '';
         previewVersionCustom.focus();
       }
     };
@@ -721,15 +799,15 @@ btnConfirmAdd.addEventListener('click', async () => {
   btnConfirmAdd.textContent = 'Saving...';
 
   try {
-    const selectedVersion = (previewVersionSelect.value === '__custom__')
-      ? (previewVersionCustom.value.trim() || pendingQuickAddData.latestVersion || 'v1.0.0')
+    const selectedVersion = (previewVersionSelect.style.display === 'none' || previewVersionSelect.value === '__custom__')
+      ? (previewVersionCustom.value.trim() || pendingQuickAddData.latestVersion || '')
       : previewVersionSelect.value;
 
     await extAPI.runtime.sendMessage({
       type: 'QUICK_ADD_GAME',
       input: pendingQuickAddData.id,
       title: pendingQuickAddData.title,
-      latestVersion: pendingQuickAddData.latestVersion,
+      latestVersion: pendingQuickAddData.latestVersion || selectedVersion,
       installedVersion: selectedVersion,
       prefixes: pendingQuickAddData.prefixes || []
     });

@@ -77,6 +77,14 @@ export const test = base.extend({
         }
 
         if (url.includes('/threads/')) {
+          if (url.includes('46791')) {
+            // Simulate Cloudflare 403 challenge page as experienced in real browser
+            return route.fulfill({
+              status: 403,
+              contentType: 'text/html; charset=utf-8',
+              body: '<!DOCTYPE html><html><head><title>Just a moment...</title></head><body>Cloudflare challenge</body></html>'
+            });
+          }
           const threadHtml = fs.readFileSync(path.join(fixturesDir, 'SYNTHETIC_thread_page.html'), 'utf8');
           return route.fulfill({
             status: 200,

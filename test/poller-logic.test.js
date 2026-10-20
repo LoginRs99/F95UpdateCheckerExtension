@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 
 import {
   calculateJitterDelay,
-  calculateBackoffMs
+  calculateBackoffMs,
+  resolveThreadMetadata
 } from '../src/background/poller.js';
 
 test('calculateJitterDelay respects range and boundaries', () => {
@@ -34,4 +35,24 @@ test('calculateBackoffMs implements exponential backoff with upper cap', () => {
   // Large failure count capped at 24 hours (1440 minutes)
   const fLarge = calculateBackoffMs(10);
   assert.equal(fLarge, 1440 * 60 * 1000);
+});
+
+test('resolveThreadMetadata extracts slug metadata accurately even if network fails', async () => {
+  // Mock global fetch to simulate 403 Forbidden Cloudflare challenge
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: false,
+    status: 403,
+    text: async () => 'Cloudflare Just a moment...'
+  });
+
+  try {
+    const meta = await resolveThreadMetadata('https://f95zone.to/threads/littleman-remake-v0-68-mr-rabbit-team.46791/');
+    assert.equal(meta.id, '46791');
+    assert.equal(meta.title, 'Littleman Remake');
+    assert.equal(meta.latestVersion, 'v0.68');
+    assert.deepEqual(meta.versions, ['v0.68']);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
