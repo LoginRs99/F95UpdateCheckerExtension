@@ -1,6 +1,6 @@
 {
   "name": "f95-update-tracker",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Lightweight Manifest V3 extension to track F95zone game updates (Chromium and Firefox)",
   "type": "module",
   "private": true,
