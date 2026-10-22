@@ -26,11 +26,14 @@ This document details the architectural research, verified constraints, installa
 
 ### B. Minimum Firefox Version (`strict_min_version`)
 - **Status**: **VERIFIED**
-- **MDN Source**: [MDN: Firefox 121 Release Notes for WebExtensions](https://developer.mozilla.org/en-US/docs/Mozilla/Firefox/Releases/121)
+- **MDN & Mozilla Sources**:
+  - [MDN: Firefox 121 Release Notes for WebExtensions](https://developer.mozilla.org/en-US/docs/Mozilla/Firefox/Releases/121)
+  - [Mozilla Extension Workshop: Data Collection Permissions](https://extensionworkshop.com/documentation/publish/data-disclosure/)
 - **Details**:
   - MV3 was enabled by default in Firefox 109.0.
   - ES module loading (`"type": "module"`) in `background.scripts` was implemented in Firefox 121.0.
-  - Setting `browser_specific_settings.gecko.strict_min_version = "121.0"` ensures all ES module background features are supported out-of-the-box.
+  - `data_collection_permissions` was introduced in **Firefox 140.0** (Desktop) and **Firefox for Android 142.0**.
+  - Setting `browser_specific_settings.gecko.strict_min_version = "140.0"` and `browser_specific_settings.gecko_android.strict_min_version = "142.0"` ensures zero AMO validation warnings (`0 errors, 0 warnings`) on addons.mozilla.org upload.
 
 ---
 

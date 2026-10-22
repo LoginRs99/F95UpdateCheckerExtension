@@ -8,7 +8,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const rootDir = path.resolve(__dirname, '..');
 
-const version = '0.4.1';
+const version = '0.4.2';
 
 const baseManifest = {
   manifest_version: 3,
@@ -97,10 +97,13 @@ function buildTarget(target) {
     manifest.browser_specific_settings = {
       gecko: {
         id: 'f95-update-tracker@loginrs99.github.io',
-        strict_min_version: '121.0',
+        strict_min_version: '140.0',
         data_collection_permissions: {
           required: ['none']
         }
+      },
+      gecko_android: {
+        strict_min_version: '142.0'
       }
     };
   }

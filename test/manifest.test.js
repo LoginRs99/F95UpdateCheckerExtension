@@ -78,7 +78,8 @@ test('Firefox manifest compliance (dist/firefox)', () => {
   // Firefox gecko settings
   assert.ok(manifest.browser_specific_settings?.gecko, 'browser_specific_settings.gecko must exist');
   assert.equal(manifest.browser_specific_settings.gecko.id, 'f95-update-tracker@loginrs99.github.io');
-  assert.equal(manifest.browser_specific_settings.gecko.strict_min_version, '121.0');
+  assert.equal(manifest.browser_specific_settings.gecko.strict_min_version, '140.0');
+  assert.equal(manifest.browser_specific_settings.gecko_android?.strict_min_version, '142.0');
   assert.deepEqual(
     manifest.browser_specific_settings.gecko.data_collection_permissions?.required,
     ['none']
