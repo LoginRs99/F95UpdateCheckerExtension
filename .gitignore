@@ -18,8 +18,10 @@ npm-debug.log*
 # Release archives
 *.zip
 *.tar.gz
+*.xpi
 dist/
 build/
+web-ext-artifacts/
 
 # Test output
 test-results/
