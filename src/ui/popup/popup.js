@@ -362,10 +362,12 @@ function renderActiveTabBanner(threadId, info) {
   versionGroup.appendChild(label);
 
   const select = document.createElement('select');
+  select.id = 'active-tab-version-select';
   select.className = 'form-select form-select-sm';
 
   const customInput = document.createElement('input');
   customInput.type = 'text';
+  customInput.id = 'active-tab-custom-version';
   customInput.className = 'form-input form-select-sm';
   customInput.placeholder = 'e.g. v0.9.5';
   customInput.style.display = 'none';
@@ -410,6 +412,7 @@ function renderActiveTabBanner(threadId, info) {
 
   const trackBtn = document.createElement('button');
   trackBtn.type = 'button';
+  trackBtn.id = 'btn-active-tab-track';
   trackBtn.className = 'btn btn-primary btn-sm';
   trackBtn.textContent = '+ Track Game';
 
@@ -693,6 +696,23 @@ function createGameCard(game) {
     actions.appendChild(markBtn);
   }
 
+  // Archive button
+  const archiveBtn = document.createElement('button');
+  archiveBtn.type = 'button';
+  archiveBtn.className = 'btn btn-secondary btn-xs';
+  archiveBtn.textContent = game.archived ? 'Unarchive' : 'Archive';
+  archiveBtn.title = game.archived ? 'Restore to active list' : 'Move to archive';
+  archiveBtn.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    await extAPI.runtime.sendMessage({
+      type: 'UPDATE_GAME',
+      id: game.id,
+      payload: { archived: !game.archived }
+    });
+    await loadData();
+  });
+  actions.appendChild(archiveBtn);
+
   // Chevron indicator
   const chevron = document.createElement('span');
   chevron.className = 'chevron-icon';
@@ -772,21 +792,6 @@ function createGameCard(game) {
     extAPI.tabs.create({ url: game.url });
   });
   actionGroup.appendChild(openThreadBtn);
-
-  const archiveBtn = document.createElement('button');
-  archiveBtn.type = 'button';
-  archiveBtn.className = 'btn btn-secondary btn-xs';
-  archiveBtn.textContent = game.archived ? 'Unarchive' : 'Archive';
-  archiveBtn.addEventListener('click', async (e) => {
-    e.stopPropagation();
-    await extAPI.runtime.sendMessage({
-      type: 'UPDATE_GAME',
-      id: game.id,
-      payload: { archived: !game.archived }
-    });
-    await loadData();
-  });
-  actionGroup.appendChild(archiveBtn);
 
   const removeBtn = document.createElement('button');
   removeBtn.type = 'button';
