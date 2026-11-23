@@ -82,8 +82,21 @@ export function parseThreadHeading(rawHeading) {
     return { title: '', version: '', prefixes: [] };
   }
 
+  // Strip XenForo unread alert/message count prefixes like "(14) " or "(1) "
+  let text = rawHeading.replace(/^\s*\(\d+\)\s*/, '');
+
   // Strip page title suffix: | F95zone ... or _ F95zone ... or - F95zone ...
-  let text = rawHeading.replace(/\s*[-|_]\s*F95zone.*$/i, '').replace(/\s+/g, ' ').trim();
+  text = text.replace(/\s*[-|_]\s*F95zone.*$/i, '');
+
+  // Decode common HTML entities and normalize whitespace
+  text = text
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&#039;/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/\s+/g, ' ')
+    .trim();
+
   const prefixes = [];
 
   // Match leading bracketed tags or label spans, e.g. [Completed] [VN]
@@ -104,16 +117,19 @@ export function parseThreadHeading(rawHeading) {
     text = text.slice(currentIdx).trim();
   }
 
-  // Also match leading prefix tags with dashes, e.g. 'Completed - VN - Ren\'Py - '
-  const dashPrefixMatch = text.match(/^(?:(Completed|Abandoned|On Hold|O\/H|VN|Ren'?Py|Unity|Unreal(?: Engine)?|RPGM|Wolf RPG|Action|HTML|Flash|Java|QSP|Others|Mod)\s*-\s*)+/i);
-  if (dashPrefixMatch) {
-    const parts = dashPrefixMatch[0].split('-').map(p => p.trim()).filter(Boolean);
-    prefixes.push(...parts);
-    text = text.slice(dashPrefixMatch[0].length).trim();
+  // Also match leading prefix tags with dashes or whitespace, e.g. 'Completed - VN - Ren\'Py - ' or 'VN Ren\'Py '
+  const prefixRegex = /^(?:(?:Completed|Abandoned|On Hold|O\/H|VN|Ren'?Py|Unity|Unreal(?: Engine)?|RPGM|Wolf RPG|Action|HTML|Flash|Java|QSP|Others|Mod)\s*(?:[-–—]\s*|\s+))+/i;
+  const prefixMatch = text.match(prefixRegex);
+  if (prefixMatch) {
+    const matchedStr = prefixMatch[0];
+    const tokenRegex = /(Completed|Abandoned|On Hold|O\/H|VN|Ren'?Py|Unity|Unreal(?: Engine)?|RPGM|Wolf RPG|Action|HTML|Flash|Java|QSP|Others|Mod)/gi;
+    const tokens = [...matchedStr.matchAll(tokenRegex)].map(m => m[1].trim());
+    prefixes.push(...tokens);
+    text = text.slice(matchedStr.length).trim();
   }
 
   // Look for version pattern inside brackets anywhere in the remainder:
-  // e.g. [v0.12.3], [0.5], [Ch.2], [Ep. 1-3], [Part 1]
+  // e.g. [v0.12.3], [0.5], [Ch.2], [Ep.7d], [Ep. 1-3], [Part 1]
   let version = '';
   const versionMatch = text.match(/\[(v?[\d][^\]]*|Ch\.[^\]]*|Ep\.[^\]]*|Part\s*[\d][^\]]*)\]/i);
   if (versionMatch) {
@@ -129,6 +145,9 @@ export function parseThreadHeading(rawHeading) {
   if (versionMatch) {
     cleanTitle = cleanTitle.replace(versionMatch[0], '').replace(/\s+/g, ' ').trim();
   }
+
+  // Strip residual leading/trailing dashes and whitespace
+  cleanTitle = cleanTitle.replace(/^[-–—\s]+|[-–—\s]+$/g, '').trim();
 
   return {
     title: cleanTitle || text,
@@ -221,33 +240,53 @@ export function parseChangelogFromHtml(html, oldVersion = '', newVersion = '') {
   if (!html || typeof html !== 'string') return fallback;
 
   try {
-    // 1. Look for spoiler with Changelog in the spoiler button or header
-    const spoilerRegex = /<div[^>]*class="[^"]*bbCodeSpoiler[^"]*"[^>]*>([\s\S]*?)<\/div>\s*<\/div>/gi;
+    // 1. Look for Changelog heading preceding a spoiler:
+    // e.g. <b>Changelog</b>:<br><div class="bbCodeSpoiler">...<div class="bbCodeBlock-content">...</div>
+    const changelogBlockRegex = /(?:<b>|<strong>|\b)(?:Change[ -]?log)(?:<\/b>|<\/strong>)?\s*:?\s*(?:<br\s*\/?>)?\s*<div[^>]*class="[^"]*bbCodeSpoiler[^"]*"[\s\S]*?<div[^>]*class="[^"]*bbCodeBlock-content[^"]*"[^>]*>([\s\S]*?)<\/div>/i;
+    const clBlockMatch = html.match(changelogBlockRegex);
+    if (clBlockMatch && clBlockMatch[1]) {
+      const text = clBlockMatch[1]
+        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<\/(?:p|div|li)>/gi, '\n')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/&nbsp;/g, ' ')
+        .replace(/&amp;/g, '&')
+        .replace(/\n\s*\n+/g, '\n')
+        .trim();
+      if (text.length > 5) {
+        return text.slice(0, 400) + (text.length > 400 ? '...' : '');
+      }
+    }
+
+    // 2. Look for spoiler with Changelog in the spoiler button label or opening text
+    const spoilerRegex = /<div[^>]*class="[^"]*bbCodeSpoiler[^"]*"[\s\S]*?<button[^>]*class="[^"]*bbCodeSpoiler-button[^"]*"[^>]*>([\s\S]*?)<\/button>[\s\S]*?<div[^>]*class="[^"]*bbCodeBlock-content[^"]*"[^>]*>([\s\S]*?)<\/div>/gi;
     const spoilers = [...html.matchAll(spoilerRegex)];
     for (const sp of spoilers) {
-      const spContent = sp[0];
-      if (/changelog|change-log|changes|updates/i.test(spContent)) {
-        // Strip HTML tags safely to plain text
-        const text = spContent
-          .replace(/<button[\s\S]*?<\/button>/gi, '') // remove button label
+      const btnText = sp[1] || '';
+      const content = sp[2] || '';
+      if (/changelog|change-log|changes|updates/i.test(btnText) || /changelog|change-log/i.test(content.slice(0, 100))) {
+        const text = content
+          .replace(/<br\s*\/?>/gi, '\n')
+          .replace(/<\/(?:p|div|li)>/gi, '\n')
           .replace(/<[^>]+>/g, ' ')
+          .replace(/&nbsp;/g, ' ')
           .replace(/\s+/g, ' ')
           .trim();
         if (text.length > 10) {
-          return text.slice(0, 300) + (text.length > 300 ? '...' : '');
+          return text.slice(0, 400) + (text.length > 400 ? '...' : '');
         }
       }
     }
 
-    // 2. Look for bbCodeBlock or bold Changelog label
-    const headingMatch = html.match(/(?:<b>|<strong>|\b)(?:Changelog|Change Log|Updates)(?:<\/b>|<\/strong>|:)([\s\S]{10,400})/i);
+    // 3. Look for bold Changelog heading followed by text block
+    const headingMatch = html.match(/(?:<b>|<strong>)(?:Change[ -]?log)(?:<\/b>|<\/strong>)\s*:?\s*([\s\S]{10,400})/i);
     if (headingMatch && headingMatch[1]) {
       const text = headingMatch[1]
         .replace(/<[^>]+>/g, ' ')
         .replace(/\s+/g, ' ')
         .trim();
       if (text.length > 10) {
-        return text.slice(0, 300) + (text.length > 300 ? '...' : '');
+        return text.slice(0, 400) + (text.length > 400 ? '...' : '');
       }
     }
   } catch {
@@ -274,12 +313,11 @@ export function extractVersionsFromHtml(html, currentVersion = '') {
 
   if (!html || typeof html !== 'string') return versions;
 
-  // Prioritize first post or spoiler/changelog sections if available
+  // Extract first post text: match from message--post up to </article>
   let targetText = '';
-  const postMatch = html.match(/<article[^>]*class="[^"]*message--post[^"]*"[\s\S]*?<div[^>]*class="[^"]*bbWrapper[^"]*"[^>]*>([\s\S]*?)<\/div>/i) ||
-                    html.match(/<div[^>]*class="[^"]*bbWrapper[^"]*"[^>]*>([\s\S]*?)<\/div>/i);
+  const postMatch = html.match(/<article[^>]*class="[^"]*(?:message--post|message-threadStarterPost)[^"]*"[\s\S]*?<\/article>/i);
   if (postMatch) {
-    targetText = postMatch[1];
+    targetText = postMatch[0];
   } else {
     targetText = html;
   }
@@ -294,19 +332,22 @@ export function extractVersionsFromHtml(html, currentVersion = '') {
 
   const lines = plainText.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
 
-  // Pattern 1: Lines starting with a version heading, e.g. "v0.21.1:", "Ch.8 RE v5.0:", "v1.0.0 -", "0.20:", "Version 1.2"
+  // Pattern 1: Lines starting with a version heading, e.g. "v0.21.1:", "Ch.8 RE v5.0:", "Episode 7D", "v0.11 Day 1"
   const lineHeadingRegex = /^(?:#+\s*)?(?:(?:v(?:er(?:sion)?)?\.?\s*|ch(?:apter)?\.?\s*|ep(?:isode)?\.?\s*|part\s*))?([0-9]+(?:\.[0-9a-zA-Z_\-]+)*(?:\s*(?:Extra|Final|Hotfix|RE|Patch|v[0-9\.]+))*)\s*(?:[:\-\–\—]|\s*$)/i;
 
-  // Pattern 2: Explicit version tokens like v0.21.1 or Ch.8 in the line
+  // Pattern 2: Explicit version tokens like v0.21.1 or Ch.8 or Ep.7d or Episode 7D
   const explicitTokenRegex = /\b((?:v|ver\.|ch\.|ep\.|part\s*)[0-9]+(?:\.[0-9a-zA-Z_\-]+)*(?:\s*(?:Extra|Final|Hotfix|RE|Patch|v[0-9\.]+))*)\b/gi;
 
-  // Pattern 3: Bracketed versions like [v0.20], [Ch.7]
+  // Pattern 3: Bracketed versions like [v0.20], [Ch.7], [Ep.7d]
   const bracketRegex = /\[(v?[\d][^\]]*|Ch\.[^\]]*|Ep\.[^\]]*|Part\s*[\d][^\]]*)\]/gi;
+
+  // Pattern 4: Episode / Chapter spelled out: Episode 7D, Chapter 3, etc.
+  const episodeRegex = /\b(Episode\s+[0-9]+[a-zA-Z]*(?:\s+Remake)?|Chapter\s+[0-9]+[a-zA-Z]*)\b/gi;
 
   function tryAdd(cand) {
     if (!cand) return;
     cand = cand.replace(/^[\[\(\s]+|[\]\)\:\-\–\—\s]+$/g, '').trim();
-    if (!cand || cand.length < 2 || cand.length > 30) return;
+    if (!cand || cand.length < 2 || cand.length > 35) return;
     if (/^(?:19\d\d|20\d\d)$/.test(cand)) return;
     if (/^(?:1080|720|480|4k)$/i.test(cand)) return;
     if (/^(?:megaupload|pixeldrain|mediafire|google|mega|download|link|changelog)$/i.test(cand)) return;
@@ -320,11 +361,16 @@ export function extractVersionsFromHtml(html, currentVersion = '') {
   }
 
   for (const line of lines) {
-    if (line.length <= 80) {
+    if (line.length <= 100) {
       const headingMatch = line.match(lineHeadingRegex);
       if (headingMatch && headingMatch[1]) {
         tryAdd(headingMatch[0].replace(/[:\-\–\—]$/, ''));
       }
+    }
+
+    const epMatches = [...line.matchAll(episodeRegex)];
+    for (const m of epMatches) {
+      tryAdd(m[1]);
     }
 
     const explicitMatches = [...line.matchAll(explicitTokenRegex)];

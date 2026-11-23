@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light dark">
   <title>F95 Update Tracker</title>
   <link rel="stylesheet" href="popup.css">
 </head>
@@ -11,33 +12,36 @@
     <!-- Top Header -->
     <header class="header">
       <div class="header-brand">
-        <div class="logo-icon">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <div class="logo-icon" aria-hidden="true">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
             <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
             <polyline points="2 17 12 22 22 17"></polyline>
             <polyline points="2 12 12 17 22 12"></polyline>
           </svg>
         </div>
-        <div class="header-title">
-          <span class="logo-text">F95 TRACKER</span>
-          <span id="badge-count" class="badge-count" style="display: none;">0</span>
+        <div class="header-meta">
+          <div class="header-title-row">
+            <h1 class="logo-text">F95 TRACKER</h1>
+            <span id="badge-count" class="badge-count" style="display: none;" aria-label="Updates available">0</span>
+          </div>
+          <span id="last-checked-label" class="last-checked-label" title="Timestamp of last update check">Last checked: Never</span>
         </div>
       </div>
       <div class="header-actions">
-        <button id="btn-toggle-add" class="btn btn-icon" title="Add Game by URL or ID">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <button id="btn-toggle-add" class="btn btn-icon" title="Add Game by URL or ID" aria-label="Add game">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
             <line x1="12" y1="5" x2="12" y2="19"></line>
             <line x1="5" y1="12" x2="19" y2="12"></line>
           </svg>
         </button>
-        <button id="btn-check-now" class="btn btn-secondary btn-sm" title="Check for updates now">
-          <svg class="btn-icon-svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <button id="btn-check-now" class="btn btn-primary btn-sm" title="Check for updates now" aria-label="Check for updates">
+          <svg class="btn-icon-svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.3"/>
           </svg>
           <span class="btn-label">Check Now</span>
         </button>
-        <button id="btn-open-library" class="btn btn-icon" title="Open Library Dashboard & Settings">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <button id="btn-toggle-settings" class="btn btn-icon" title="Quick Settings & Preferences" aria-label="Toggle settings">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="3"></circle>
             <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
           </svg>
@@ -45,19 +49,23 @@
       </div>
     </header>
 
-    <!-- Paused Alert Banner -->
-    <div id="popup-paused-alert" class="popup-paused-alert" style="display: none;"></div>
+    <!-- Error / Status Notice Banner -->
+    <div id="popup-paused-alert" class="popup-alert-banner" style="display: none;" role="alert"></div>
 
-    <!-- Active Tab Game Banner -->
-    <div id="active-tab-banner" class="active-tab-banner" style="display: none;"></div>
+    <!-- Active Tab Detected Banner -->
+    <section id="active-tab-banner" class="active-tab-banner" style="display: none;" aria-label="Current active tab game"></section>
 
-    <!-- Quick Add Panel -->
-    <div id="quick-add-panel" class="quick-add-panel" style="display: none;">
-      <div class="quick-add-title">Add Game by F95zone URL or ID</div>
+    <!-- Quick Add Drawer -->
+    <section id="quick-add-panel" class="quick-add-panel" style="display: none;" aria-label="Add game form">
+      <div class="panel-header">
+        <span class="panel-title">Add Game to Tracker</span>
+        <button id="btn-close-quick-add" class="btn-close" aria-label="Close add panel">&times;</button>
+      </div>
       <div class="quick-add-input-row">
-        <input type="text" id="quick-add-input" class="form-input" placeholder="e.g. https://f95zone.to/threads/305500/ or 305500" autocomplete="off" />
+        <input type="text" id="quick-add-input" class="form-input" placeholder="Paste F95zone URL or thread ID..." autocomplete="off" spellcheck="false" />
         <button id="btn-quick-add-resolve" class="btn btn-primary btn-sm">Find</button>
       </div>
+      <div id="quick-add-feedback" class="form-feedback" style="display: none;"></div>
       <div id="quick-add-preview" class="quick-add-preview" style="display: none;">
         <div class="preview-game-title" id="preview-title"></div>
         <div class="preview-field">
@@ -72,40 +80,78 @@
           <button id="btn-cancel-add" class="btn btn-secondary btn-sm">Cancel</button>
         </div>
       </div>
-    </div>
+    </section>
 
-    <!-- Controls: Search & Filter Tabs -->
+    <!-- Quick Settings Drawer -->
+    <section id="quick-settings-panel" class="quick-settings-panel" style="display: none;" aria-label="Quick Settings">
+      <div class="panel-header">
+        <span class="panel-title">Quick Settings</span>
+        <button id="btn-close-settings" class="btn-close" aria-label="Close settings">&times;</button>
+      </div>
+      <div class="settings-grid">
+        <div class="settings-row">
+          <label for="popup-setting-poll" class="setting-label">Check Interval:</label>
+          <select id="popup-setting-poll" class="form-select form-select-sm">
+            <option value="30">Every 30 minutes</option>
+            <option value="60">Every 1 hour</option>
+            <option value="120">Every 2 hours</option>
+            <option value="360">Every 6 hours</option>
+            <option value="720">Every 12 hours</option>
+            <option value="1440">Every 24 hours</option>
+          </select>
+        </div>
+        <div class="settings-row">
+          <label for="popup-setting-theme" class="setting-label">Theme Mode:</label>
+          <select id="popup-setting-theme" class="form-select form-select-sm">
+            <option value="system">Auto (System)</option>
+            <option value="dark">Dark</option>
+            <option value="light">Light</option>
+          </select>
+        </div>
+      </div>
+      <div class="settings-footer-actions">
+        <button id="btn-open-full-library" class="btn btn-secondary btn-sm">
+          <span>Open Full Dashboard & Backups</span>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="9 18 15 12 9 6"></polyline>
+          </svg>
+        </button>
+      </div>
+    </section>
+
+    <!-- Search & Filter Controls -->
     <div class="controls-bar">
       <div class="search-input-wrapper">
-        <svg class="search-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <svg class="search-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <circle cx="11" cy="11" r="8"></circle>
           <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
         </svg>
-        <input type="text" id="popup-search" placeholder="Filter tracked games..." autocomplete="off" spellcheck="false" />
+        <input type="search" id="popup-search" placeholder="Filter tracked software..." autocomplete="off" spellcheck="false" aria-label="Filter games" />
+        <button id="btn-clear-search" class="btn-clear-search" style="display: none;" aria-label="Clear search">&times;</button>
       </div>
-      <div class="filter-pills" id="filter-pills">
+      <nav class="filter-pills" id="filter-pills" aria-label="Filter by update status">
         <button class="filter-pill active" data-filter="all">All <span class="pill-count" id="count-all">0</span></button>
         <button class="filter-pill" data-filter="updates">Updates <span class="pill-count count-update" id="count-updates">0</span></button>
         <button class="filter-pill" data-filter="current">Installed <span class="pill-count" id="count-current">0</span></button>
         <button class="filter-pill" data-filter="archived">Archived <span class="pill-count" id="count-archived">0</span></button>
-      </div>
+      </nav>
     </div>
 
     <!-- Main Game Cards List -->
-    <main id="game-list" class="game-list">
+    <main id="game-list" class="game-list" aria-live="polite">
       <div id="loading" class="empty-state">
-        <div class="empty-state-spinner"></div>
-        <span>Loading tracked games...</span>
+        <div class="empty-state-spinner" aria-hidden="true"></div>
+        <span>Loading tracked software...</span>
       </div>
     </main>
 
     <!-- Footer Stats -->
     <footer class="footer">
       <div class="footer-left">
-        <span class="status-pulse-dot"></span>
-        <span id="footer-stats">Tracking 0 games</span>
+        <span class="status-pulse-dot" aria-hidden="true"></span>
+        <span id="footer-stats">Tracking 0 items</span>
       </div>
-      <span class="footer-version">v0.4.0</span>
+      <span class="footer-version" id="footer-version-tag">v0.5.0</span>
     </footer>
   </div>
 

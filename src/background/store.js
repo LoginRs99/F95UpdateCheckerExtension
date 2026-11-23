@@ -103,9 +103,72 @@ export async function updateSettings(partial) {
   return updated;
 }
 
+export async function migrateStorageIfNeeded() {
+  const storage = await getStorageArea();
+  const raw = await storage.get(null);
+  let changed = false;
+  const updates = {};
+
+  // 1. If games was stored as an array (legacy schema), convert to dictionary
+  if (Array.isArray(raw.games)) {
+    const dict = {};
+    for (const item of raw.games) {
+      if (item && (item.id || item.threadId)) {
+        const id = String(item.id || item.threadId).trim();
+        dict[id] = createGameRecord({ ...item, id });
+      }
+    }
+    updates.games = dict;
+    changed = true;
+  } else if (raw.games && typeof raw.games === 'object') {
+    // Ensure all records conform to GameRecord schema
+    let recordUpdated = false;
+    const normalized = {};
+    for (const [id, rec] of Object.entries(raw.games)) {
+      const cleanRec = createGameRecord(rec);
+      normalized[id] = cleanRec;
+      if (JSON.stringify(cleanRec) !== JSON.stringify(rec)) {
+        recordUpdated = true;
+      }
+    }
+    if (recordUpdated) {
+      updates.games = normalized;
+      changed = true;
+    }
+  }
+
+  // 2. Settings migration: ensure all default keys exist
+  if (!raw.settings || typeof raw.settings !== 'object') {
+    updates.settings = { ...DEFAULT_SETTINGS };
+    changed = true;
+  } else {
+    let settingsUpdated = false;
+    const mergedSettings = { ...DEFAULT_SETTINGS, ...raw.settings };
+    for (const key of Object.keys(DEFAULT_SETTINGS)) {
+      if (raw.settings[key] === undefined) {
+        settingsUpdated = true;
+      }
+    }
+    if (settingsUpdated) {
+      updates.settings = mergedSettings;
+      changed = true;
+    }
+  }
+
+  if (changed) {
+    await storage.set(updates);
+  }
+  return changed;
+}
+
 export async function getGames() {
   const storage = await getStorageArea();
   const data = await storage.get({ games: {} });
+  if (Array.isArray(data.games)) {
+    await migrateStorageIfNeeded();
+    const refreshed = await storage.get({ games: {} });
+    return refreshed.games || {};
+  }
   return data.games || {};
 }
 

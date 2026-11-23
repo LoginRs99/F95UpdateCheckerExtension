@@ -8,7 +8,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const rootDir = path.resolve(__dirname, '..');
 
-const version = '0.4.2';
+const version = '0.5.0';
 
 const baseManifest = {
   manifest_version: 3,

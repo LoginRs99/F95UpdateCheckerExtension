@@ -81,6 +81,26 @@ test('parseThreadHeading parses titles, opaque versions, and prefixes', () => {
   assert.equal(r8.title, 'Photo Hunt');
   assert.equal(r8.version, 'v0.21.1 Extra');
   assert.deepEqual(r8.prefixes, ["Ren'Py"]);
+
+  // Case 9: XenForo logged-in alert/unread notification counter prefix "(14) "
+  const h9 = "(14) VN - Ren'Py - Strong Desire [Ep.7d] [TheBlueInk] | F95zone | Adult Games | Comics | Mods | Cheats";
+  const r9 = parseThreadHeading(h9);
+  assert.equal(r9.title, 'Strong Desire');
+  assert.equal(r9.version, 'Ep.7d');
+  assert.deepEqual(r9.prefixes, ['VN', "Ren'Py"]);
+
+  const h10 = "(14) VN - Ren'Py - The Rehabilitation Project [v0.11] [Next-Gen Entertainment] | F95zone | Adult Games | Comics | Mods _ Cheats";
+  const r10 = parseThreadHeading(h10);
+  assert.equal(r10.title, 'The Rehabilitation Project');
+  assert.equal(r10.version, 'v0.11');
+  assert.deepEqual(r10.prefixes, ['VN', "Ren'Py"]);
+
+  // Case 11: Raw H1 text with &nbsp; entities
+  const h11 = "VN &nbsp; Ren'Py &nbsp; Strong Desire [Ep.7d] [TheBlueInk]";
+  const r11 = parseThreadHeading(h11);
+  assert.equal(r11.title, 'Strong Desire');
+  assert.equal(r11.version, 'Ep.7d');
+  assert.deepEqual(r11.prefixes, ['VN', "Ren'Py"]);
 });
 
 test('parseThreadSlug extracts clean title, version, and ID from slugs', () => {
@@ -231,4 +251,45 @@ test('extractVersionsFromHtml detects current and previous versions accurately',
 
   // Verify handling with null/empty inputs
   assert.deepEqual(extractVersionsFromHtml(null, ''), []);
+});
+
+test('extracts changelog and versions accurately from xenforo_new_thread_sample fixture', () => {
+  const p = path.join(rootDir, 'fixtures', 'xenforo_new_thread_sample.html');
+  const html = fs.readFileSync(p, 'utf8');
+
+  const cl = parseChangelogFromHtml(html, 'Ep.7c', 'Ep.7d');
+  assert.ok(cl.includes('Episode 7D'), 'Must extract Episode 7D from spoiler');
+  assert.ok(cl.includes('static renders'), 'Must include render stats');
+
+  const versions = extractVersionsFromHtml(html, 'Ep.7d');
+  assert.equal(versions[0], 'Ep.7d');
+  assert.ok(versions.includes('Episode 7D'));
+  assert.ok(versions.includes('Episode 7C'));
+  assert.ok(versions.includes('Episode 7B'));
+});
+
+test('Parses Website/3 target markup accurately when available', () => {
+  const dir = path.join(rootDir, 'Website', '3');
+  if (!fs.existsSync(dir)) return;
+
+  const f1 = path.join(dir, "(14) VN - Ren'Py - Strong Desire [Ep.7d] [TheBlueInk] _ F95zone _ Adult Games _ Comics _ Mods _ Cheats.htm");
+  if (fs.existsSync(f1)) {
+    const html1 = fs.readFileSync(f1, 'utf8');
+    const changelog1 = parseChangelogFromHtml(html1, 'Ep.7c', 'Ep.7d');
+    assert.ok(changelog1.includes('Episode 7D') || changelog1.includes('renders'), 'Must extract Episode 7D changelog');
+    const versions1 = extractVersionsFromHtml(html1, 'Ep.7d');
+    assert.ok(versions1.length > 1, 'Must extract versions from Strong Desire first post');
+    assert.equal(versions1[0], 'Ep.7d');
+    assert.ok(versions1.some(v => v.includes('Episode 7D') || v.includes('Episode 7C') || v.includes('6D')));
+  }
+
+  const f2 = path.join(dir, "(14) VN - Ren'Py - The Rehabilitation Project [v0.11] [Next-Gen Entertainment] _ F95zone _ Adult Games _ Comics _ Mods _ Cheats.htm");
+  if (fs.existsSync(f2)) {
+    const html2 = fs.readFileSync(f2, 'utf8');
+    const changelog2 = parseChangelogFromHtml(html2, 'v0.10', 'v0.11');
+    assert.ok(changelog2.includes('v0.11') || changelog2.includes('weekly content update'), 'Must extract v0.11 changelog without false-matching overview');
+    const versions2 = extractVersionsFromHtml(html2, 'v0.11');
+    assert.ok(versions2.length >= 1, 'Must extract versions from The Rehabilitation Project');
+    assert.equal(versions2[0], 'v0.11');
+  }
 });

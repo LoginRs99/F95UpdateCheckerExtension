@@ -8,8 +8,10 @@ A lightweight, zero-dependency browser extension for tracking your installed ver
 
 - **Cross-Browser Support**: Native Manifest V3 packages for Chromium (service worker) and Firefox / Zen (ES module event page), sharing a clean, zero-dependency codebase.
 - **One-Click Extension Tracking**: Clean forum browsing with zero injected buttons on page content. Automatically detects the active F95zone thread directly inside the extension popup, or via the `+` Quick Add button for any URL or thread ID.
+- **Modern Web Guidance (MWG) UI**: Completely redesigned interface built using modern CSS `color-scheme: light dark` and `light-dark()` design tokens, smooth animations, compact viewport optimization (`380px–420px`), and native accessibility rings.
 - **Automatic Version Detection & Dropdown**: Intelligently scans thread headings, changelogs, and spoiler blocks to detect current (latest) and historical/previous versions. Populates a version dropdown so you can pick which version you have installed on your machine with one click.
-- **High-Density Compact Layout**: Linear & Raycast obsidian dark-mode interface built to effortlessly navigate 20–50+ games. Features instant search filtering, status pills (`All`, `Updates`, `Installed`, `Archived`), and smooth click-to-expand details drawers.
+- **Robust DOM Parser for XenForo 2.x**: Strips unread notification badge counters (`(14) ...`), decodes HTML entities (`&nbsp;`), accurately isolates tag prefix spans (`span.p-title-prefix`), and traverses changelog spoilers without nested `div` truncation.
+- **High-Density Compact Layout**: Modern card-based interface built to effortlessly navigate 20–50+ games. Features instant search filtering, status pills (`All`, `Updates`, `Installed`, `Archived`), and smooth click-to-expand details drawers.
 - **Smart Update Detection**: Treats game versions as opaque strings (handling arbitrary formats like `v1.0.0`, `Ch.3 Part 2`, `Ep. 1`, `0.85_Fix2`). Triggers updates whenever the forum's latest version differs from your installed version.
 - **Visual Highlights**: Marks tracked games directly on forum index pages, listing views, and Latest Updates tiles (`[TRACKED]` in green, `[UPDATE <ver>]` in red). Seamlessly updates dynamically loaded cards using a `MutationObserver`.
 - **Gentle Forum Footprint**:
@@ -38,7 +40,7 @@ A lightweight, zero-dependency browser extension for tracking your installed ver
 
 ### Chromium Browsers (Google Chrome, Brave, Microsoft Edge, Vivaldi, Opera)
 
-1. Go to the [Releases](https://github.com/LoginRs99/F95UpdateCheckerExtension/releases) page and download `f95-update-tracker-chromium-v0.4.2.zip`.
+1. Go to the [Releases](https://github.com/LoginRs99/F95UpdateCheckerExtension/releases) page and download `f95-update-tracker-chromium-v0.5.0.zip`.
 2. Extract the ZIP archive to a folder on your computer.
 3. Open your browser and navigate to `chrome://extensions/`.
 4. Enable **Developer mode** using the toggle switch in the upper-right corner.
@@ -52,7 +54,7 @@ A lightweight, zero-dependency browser extension for tracking your installed ver
 Firefox and Zen support Manifest V3 with ES module event pages (Firefox 121.0+).
 
 #### Option A: Temporary Add-on (Testing / Development)
-1. Download `f95-update-tracker-firefox-v0.4.2.zip` from [Releases](https://github.com/LoginRs99/F95UpdateCheckerExtension/releases) and extract it (or run `node scripts/build.js` locally to generate `dist/firefox/`).
+1. Download `f95-update-tracker-firefox-v0.5.0.zip` from [Releases](https://github.com/LoginRs99/F95UpdateCheckerExtension/releases) and extract it (or run `node scripts/build.js` locally to generate `dist/firefox/`).
 2. In Firefox or Zen Browser, navigate to:
    ```text
    about:debugging#/runtime/this-firefox

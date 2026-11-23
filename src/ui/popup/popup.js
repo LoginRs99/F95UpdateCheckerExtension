@@ -1,27 +1,37 @@
 // src/ui/popup/popup.js
-// Handles popup UI logic, high-density compact layout, active tab detection,
-// version dropdowns, and instant search/filters.
-// Strict textContent rendering only.
+// Modern Web Guidance (MWG) Compliant Popup Controller
+// High-density layout, active tab detection, last-checked timestamp,
+// quick settings, and safe DOM manipulation.
 
 import { extAPI } from '../../compat.js';
 import { parseThreadHeading, parseThreadSlug, parseThreadIdFromUrl } from '../../background/detector.js';
 
 let allGames = {};
+let currentSettings = null;
 let searchQuery = '';
 let activeFilter = 'all'; // 'all' | 'updates' | 'current' | 'archived'
 let activeTabInfo = null;
 
+// DOM Element references
 const gameListEl = document.getElementById('game-list');
 const badgeCountEl = document.getElementById('badge-count');
+const lastCheckedLabelEl = document.getElementById('last-checked-label');
 const footerStatsEl = document.getElementById('footer-stats');
 const searchInput = document.getElementById('popup-search');
+const btnClearSearch = document.getElementById('btn-clear-search');
 const btnCheckNow = document.getElementById('btn-check-now');
-const btnOpenLibrary = document.getElementById('btn-open-library');
+const btnToggleAdd = document.getElementById('btn-toggle-add');
+const btnToggleSettings = document.getElementById('btn-toggle-settings');
+const btnCloseSettings = document.getElementById('btn-close-settings');
+const btnCloseQuickAdd = document.getElementById('btn-close-quick-add');
+const btnOpenFullLibrary = document.getElementById('btn-open-full-library');
 const pausedAlertEl = document.getElementById('popup-paused-alert');
 const activeTabBannerEl = document.getElementById('active-tab-banner');
-const btnToggleAdd = document.getElementById('btn-toggle-add');
+
+// Quick Add Panel elements
 const quickAddPanel = document.getElementById('quick-add-panel');
 const quickAddInput = document.getElementById('quick-add-input');
+const quickAddFeedback = document.getElementById('quick-add-feedback');
 const btnQuickAddResolve = document.getElementById('btn-quick-add-resolve');
 const quickAddPreview = document.getElementById('quick-add-preview');
 const previewTitle = document.getElementById('preview-title');
@@ -29,6 +39,11 @@ const previewVersionSelect = document.getElementById('preview-version-select');
 const previewVersionCustom = document.getElementById('preview-version-custom');
 const btnConfirmAdd = document.getElementById('btn-confirm-add');
 const btnCancelAdd = document.getElementById('btn-cancel-add');
+
+// Quick Settings elements
+const quickSettingsPanel = document.getElementById('quick-settings-panel');
+const settingPollInterval = document.getElementById('popup-setting-poll');
+const settingThemeMode = document.getElementById('popup-setting-theme');
 
 // Filter count elements
 const countAllEl = document.getElementById('count-all');
@@ -38,6 +53,45 @@ const countArchivedEl = document.getElementById('count-archived');
 
 let pendingQuickAddData = null;
 
+/**
+ * Formats a timestamp into a friendly relative or short time string.
+ */
+function formatLastChecked(timestamp) {
+  if (!timestamp || timestamp <= 0) return 'Last checked: Never';
+  const now = Date.now();
+  const diffMs = Math.max(0, now - timestamp);
+  const diffSec = Math.floor(diffMs / 1000);
+  const diffMin = Math.floor(diffSec / 60);
+  const diffHour = Math.floor(diffMin / 60);
+
+  if (diffMin < 1) return 'Last checked: Just now';
+  if (diffMin < 60) return `Last checked: ${diffMin}m ago`;
+  if (diffHour < 24) return `Last checked: ${diffHour}h ago`;
+  const date = new Date(timestamp);
+  return `Last checked: ${date.toLocaleDateString()}`;
+}
+
+/**
+ * Initializes and syncs theme mode based on saved preference or system.
+ */
+function initThemeMode(savedTheme = 'system') {
+  if (settingThemeMode) settingThemeMode.value = savedTheme;
+  applyThemeMode(savedTheme);
+}
+
+function applyThemeMode(theme) {
+  if (theme === 'dark') {
+    document.documentElement.setAttribute('data-theme', 'dark');
+  } else if (theme === 'light') {
+    document.documentElement.setAttribute('data-theme', 'light');
+  } else {
+    document.documentElement.removeAttribute('data-theme');
+  }
+}
+
+/**
+ * Loads data from background service worker.
+ */
 async function loadData() {
   try {
     const [games, status] = await Promise.all([
@@ -45,13 +99,30 @@ async function loadData() {
       extAPI.runtime.sendMessage({ type: 'GET_STATUS' })
     ]);
     allGames = games || {};
-    updatePausedBanner(status ? status.settings : null);
+    currentSettings = status ? status.settings : null;
+
+    if (currentSettings) {
+      if (lastCheckedLabelEl) {
+        lastCheckedLabelEl.textContent = formatLastChecked(currentSettings.lastPollTimestamp);
+        if (currentSettings.lastPollTimestamp > 0) {
+          lastCheckedLabelEl.title = new Date(currentSettings.lastPollTimestamp).toLocaleString();
+        }
+      }
+      if (settingPollInterval && currentSettings.pollMinutes) {
+        settingPollInterval.value = String(currentSettings.pollMinutes);
+      }
+      if (currentSettings.themeMode) {
+        initThemeMode(currentSettings.themeMode);
+      }
+    }
+
+    updatePausedBanner(currentSettings);
     await checkHostPermission();
     await checkActiveTab();
     renderList();
   } catch (err) {
     console.error('Failed to load games:', err);
-    renderError('Could not load tracked games.');
+    renderError('Could not connect to background service worker.');
   }
 }
 
@@ -60,7 +131,7 @@ async function checkHostPermission() {
     try {
       const hasPerm = await extAPI.permissions.contains({ origins: ['https://f95zone.to/*'] });
       if (!hasPerm) {
-        pausedAlertEl.textContent = 'Missing permission for f95zone.to. Click here to grant.';
+        pausedAlertEl.textContent = 'Host permission needed for f95zone.to. Click here to grant.';
         pausedAlertEl.style.display = 'block';
         pausedAlertEl.style.cursor = 'pointer';
         pausedAlertEl.onclick = async () => {
@@ -82,7 +153,7 @@ function updatePausedBanner(settings) {
   const now = Date.now();
   if (settings.circuitBreakerUntil && now < settings.circuitBreakerUntil) {
     const mins = Math.max(1, Math.round((settings.circuitBreakerUntil - now) / 60000));
-    pausedAlertEl.textContent = `Paused: Circuit breaker active (${mins}m remaining).`;
+    pausedAlertEl.textContent = `Paused: Rate limit circuit breaker active (${mins}m remaining).`;
     pausedAlertEl.style.display = 'block';
   } else if (settings.requestCountToday >= settings.dailyRequestCap) {
     pausedAlertEl.textContent = `Paused: Daily request cap reached (${settings.requestCountToday}/${settings.dailyRequestCap}).`;
@@ -99,25 +170,21 @@ function isF95ThreadUrl(url) {
 
 async function findF95Tab() {
   try {
-    // 1. Check all active tabs across all windows first
     const activeTabs = await extAPI.tabs.query({ active: true });
     if (Array.isArray(activeTabs)) {
       const activeMatch = activeTabs.find(t => isF95ThreadUrl(t.url));
       if (activeMatch) return activeMatch;
     }
 
-    // 2. Check last focused window active tab
     const [focusedActive] = await extAPI.tabs.query({ active: true, lastFocusedWindow: true });
     if (focusedActive && isF95ThreadUrl(focusedActive.url)) return focusedActive;
 
-    // 3. Check any tab in last focused window
     const focusedTabs = await extAPI.tabs.query({ lastFocusedWindow: true });
     if (Array.isArray(focusedTabs)) {
       const match = focusedTabs.find(t => isF95ThreadUrl(t.url));
       if (match) return match;
     }
 
-    // 4. Fallback: check all open tabs across all windows
     const allTabs = await extAPI.tabs.query({});
     if (Array.isArray(allTabs)) {
       const match = allTabs.find(t => isF95ThreadUrl(t.url));
@@ -131,7 +198,6 @@ async function findF95Tab() {
 
 /**
  * Checks if user is currently on an F95zone thread tab.
- * If yes, offers 1-click tracking with version dropdown right in the popup!
  */
 async function checkActiveTab() {
   if (!activeTabBannerEl || !extAPI.tabs || !extAPI.tabs.query) return;
@@ -151,7 +217,6 @@ async function checkActiveTab() {
       return;
     }
 
-    // Layer A: Parse heading directly from targetTab.title and slug from targetTab.url
     const headingData = parseThreadHeading(targetTab.title || '');
     const slugData = parseThreadSlug(targetTab.url || '');
 
@@ -164,7 +229,6 @@ async function checkActiveTab() {
     let prefixes = (headingData && headingData.prefixes) ? headingData.prefixes : [];
     let versions = currentVersion ? [currentVersion] : [];
 
-    // Layer B: Try messaging content script for rich DOM info & previous changelog versions
     try {
       const domInfo = await extAPI.tabs.sendMessage(targetTab.id, { type: 'GET_PAGE_THREAD_INFO' });
       if (domInfo) {
@@ -175,7 +239,6 @@ async function checkActiveTab() {
       }
     } catch {}
 
-    // Layer C: Query background resolver if version is still missing
     if (!currentVersion || versions.length <= 1) {
       try {
         const meta = await extAPI.runtime.sendMessage({ type: 'RESOLVE_THREAD', input: targetTab.url });
@@ -217,7 +280,6 @@ function renderActiveTabBanner(threadId, info) {
   if (isAlreadyTracked) {
     const trackedGame = allGames[threadId];
     activeTabBannerEl.style.display = 'flex';
-    activeTabBannerEl.className = 'active-tab-banner';
 
     const topRow = document.createElement('div');
     topRow.className = 'active-tab-top';
@@ -226,12 +288,10 @@ function renderActiveTabBanner(threadId, info) {
     indicator.className = 'active-tab-indicator';
     const dot = document.createElement('span');
     dot.className = 'active-tab-dot';
-    dot.style.backgroundColor = '#10b981';
-    dot.style.boxShadow = '0 0 6px #10b981';
+    dot.style.backgroundColor = 'var(--status-current-dot)';
     indicator.appendChild(dot);
     const indText = document.createTextNode(' Active Tab (Tracked)');
     indicator.appendChild(indText);
-
     topRow.appendChild(indicator);
     activeTabBannerEl.appendChild(topRow);
 
@@ -245,7 +305,7 @@ function renderActiveTabBanner(threadId, info) {
 
     const verInfo = document.createElement('span');
     verInfo.className = 'active-tab-label';
-    verInfo.textContent = `Installed: ${trackedGame.installedVersion} | Latest: ${trackedGame.latestVersion}`;
+    verInfo.textContent = `Installed: ${trackedGame.installedVersion || 'none'} | Latest: ${trackedGame.latestVersion}`;
     controls.appendChild(verInfo);
 
     if (trackedGame.status === 'update') {
@@ -268,9 +328,8 @@ function renderActiveTabBanner(threadId, info) {
     return;
   }
 
-  // Untracked tab -> show 1-click track card with version dropdown
+  // Untracked tab -> offer 1-click tracking
   activeTabBannerEl.style.display = 'flex';
-  activeTabBannerEl.className = 'active-tab-banner';
 
   const topRow = document.createElement('div');
   topRow.className = 'active-tab-top';
@@ -303,13 +362,11 @@ function renderActiveTabBanner(threadId, info) {
   versionGroup.appendChild(label);
 
   const select = document.createElement('select');
-  select.id = 'active-tab-version-select';
-  select.className = 'form-select';
+  select.className = 'form-select form-select-sm';
 
   const customInput = document.createElement('input');
   customInput.type = 'text';
-  customInput.id = 'active-tab-custom-version';
-  customInput.className = 'form-input';
+  customInput.className = 'form-input form-select-sm';
   customInput.placeholder = 'e.g. v0.9.5';
   customInput.style.display = 'none';
 
@@ -332,11 +389,10 @@ function renderActiveTabBanner(threadId, info) {
     customOpt.textContent = 'Custom / Other...';
     select.appendChild(customOpt);
   } else {
-    // If no versions were detected, display the text input directly
     select.style.display = 'none';
     customInput.style.display = 'inline-block';
     customInput.value = '';
-    customInput.placeholder = 'Enter version (e.g. v0.68)';
+    customInput.placeholder = 'Enter version';
   }
 
   select.addEventListener('change', () => {
@@ -354,7 +410,6 @@ function renderActiveTabBanner(threadId, info) {
 
   const trackBtn = document.createElement('button');
   trackBtn.type = 'button';
-  trackBtn.id = 'btn-active-tab-track';
   trackBtn.className = 'btn btn-primary btn-sm';
   trackBtn.textContent = '+ Track Game';
 
@@ -412,46 +467,81 @@ function renderList() {
     badgeCountEl.style.display = 'none';
   }
 
-  // Update filter pill counts
+  // Filter counts
   if (countAllEl) countAllEl.textContent = String(totalCount);
   if (countUpdatesEl) countUpdatesEl.textContent = String(updateCount);
   if (countCurrentEl) countCurrentEl.textContent = String(currentCount);
   if (countArchivedEl) countArchivedEl.textContent = String(archivedCount);
 
   // Footer stats
-  footerStatsEl.textContent = `Tracking ${totalCount} game${totalCount === 1 ? '' : 's'} (${updateCount} update${updateCount === 1 ? '' : 's'})`;
+  footerStatsEl.textContent = `Tracking ${totalCount} item${totalCount === 1 ? '' : 's'} (${updateCount} update${updateCount === 1 ? '' : 's'})`;
 
+  // Empty state when no games are tracked
   if (totalCount === 0) {
-    const empty = document.createElement('div');
-    empty.className = 'empty-state';
-    empty.textContent = 'No games tracked yet. Browse F95zone or click "+" to add a game!';
-    gameListEl.appendChild(empty);
+    const emptyContainer = document.createElement('div');
+    emptyContainer.className = 'empty-state';
+
+    const iconSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    iconSvg.setAttribute('class', 'empty-state-icon');
+    iconSvg.setAttribute('viewBox', '0 0 24 24');
+    iconSvg.setAttribute('fill', 'none');
+    iconSvg.setAttribute('stroke', 'currentColor');
+    iconSvg.setAttribute('stroke-width', '1.6');
+    iconSvg.setAttribute('stroke-linecap', 'round');
+    iconSvg.setAttribute('stroke-linejoin', 'round');
+    iconSvg.innerHTML = `
+      <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+      <polyline points="2 17 12 22 22 17"></polyline>
+      <polyline points="2 12 12 17 22 12"></polyline>
+    `;
+    emptyContainer.appendChild(iconSvg);
+
+    const titleEl = document.createElement('h2');
+    titleEl.className = 'empty-state-title';
+    titleEl.textContent = 'No software tracked yet';
+    emptyContainer.appendChild(titleEl);
+
+    const subtextEl = document.createElement('p');
+    subtextEl.className = 'empty-state-subtext';
+    subtextEl.textContent = 'Track F95zone threads to automatically monitor new version releases, changelogs, and desktop updates.';
+    emptyContainer.appendChild(subtextEl);
+
+    const addBtn = document.createElement('button');
+    addBtn.type = 'button';
+    addBtn.className = 'btn btn-primary btn-sm';
+    addBtn.textContent = '+ Add Your First Game';
+    addBtn.addEventListener('click', () => {
+      quickAddPanel.style.display = 'flex';
+      quickAddInput.focus();
+    });
+    emptyContainer.appendChild(addBtn);
+
+    gameListEl.appendChild(emptyContainer);
     return;
   }
 
-  // Filter games based on active filter pill and search query
+  // Filter games based on search and active pill
   const query = searchQuery.toLowerCase().trim();
   const filtered = games.filter(g => {
-    // 1. Tab filter
     if (activeFilter === 'updates' && (g.archived || g.status !== 'update')) return false;
     if (activeFilter === 'current' && (g.archived || g.status === 'update')) return false;
     if (activeFilter === 'archived' && !g.archived) return false;
 
-    // 2. Search query filter
     if (!query) return true;
     return (g.title && g.title.toLowerCase().includes(query)) ||
-           (g.tags && g.tags.some(t => t.toLowerCase().includes(query)));
+           (g.tags && g.tags.some(t => t.toLowerCase().includes(query))) ||
+           (g.prefixes && g.prefixes.some(p => String(p).toLowerCase().includes(query)));
   });
 
   if (filtered.length === 0) {
     const noMatch = document.createElement('div');
     noMatch.className = 'empty-state';
-    noMatch.textContent = 'No matching games found.';
+    noMatch.textContent = 'No matching tracked software found.';
     gameListEl.appendChild(noMatch);
     return;
   }
 
-  // Group: updates first (non-archived with status == 'update'), then current, then archived
+  // Group: updates first, then up to date, then archived
   const updates = filtered.filter(g => !g.archived && g.status === 'update');
   const current = filtered.filter(g => !g.archived && g.status !== 'update');
   const archived = filtered.filter(g => g.archived);
@@ -491,25 +581,36 @@ function renderList() {
 }
 
 /**
- * Creates high-density compact obsidian game item.
- * Clicking row toggles expanded drawer.
+ * Creates an interactive card row for a tracked item.
  */
 function createGameCard(game) {
   const isUpdate = game.status === 'update' && !game.archived;
-  const card = document.createElement('div');
+  const card = document.createElement('article');
   card.className = `game-card ${isUpdate ? 'has-update' : ''}`;
+  card.tabIndex = 0;
+  card.setAttribute('role', 'region');
+  card.setAttribute('aria-label', game.title || 'Tracked item');
 
-  // Card Header / Compact Row
+  // Compact Row Header
   const header = document.createElement('div');
   header.className = 'game-card-header';
 
-  // Left side: Status dot + Title
+  // Left: Status dot + Title + Prefixes
   const left = document.createElement('div');
   left.className = 'game-card-left';
 
   const dot = document.createElement('span');
   dot.className = `status-dot ${isUpdate ? 'status-dot-update' : (game.archived ? 'status-dot-archived' : 'status-dot-current')}`;
+  dot.setAttribute('aria-hidden', 'true');
   left.appendChild(dot);
+
+  const titleGroup = document.createElement('div');
+  titleGroup.className = 'game-title-group';
+
+  const titleRow = document.createElement('div');
+  titleRow.style.display = 'flex';
+  titleRow.style.alignItems = 'center';
+  titleRow.style.gap = '6px';
 
   const titleLink = document.createElement('a');
   titleLink.className = 'game-title';
@@ -522,13 +623,44 @@ function createGameCard(game) {
     e.stopPropagation();
     extAPI.tabs.create({ url: game.url });
   });
-  left.appendChild(titleLink);
+  titleRow.appendChild(titleLink);
+  titleGroup.appendChild(titleRow);
+
+  // Prefix tags
+  if (Array.isArray(game.prefixes) && game.prefixes.length > 0) {
+    const prefixList = document.createElement('div');
+    prefixList.className = 'game-prefix-list';
+    for (const p of game.prefixes.slice(0, 3)) {
+      const tag = document.createElement('span');
+      tag.className = 'game-prefix-tag';
+      tag.textContent = String(p);
+      prefixList.appendChild(tag);
+    }
+    titleGroup.appendChild(prefixList);
+  }
+
+  left.appendChild(titleGroup);
   header.appendChild(left);
 
-  // Right side: Version chip + Action buttons + Chevron
+  // Right: Status Pill + Actions + Chevron
   const right = document.createElement('div');
   right.className = 'game-card-right';
 
+  // Status pill
+  const statusPill = document.createElement('span');
+  if (isUpdate) {
+    statusPill.className = 'status-pill pill-update';
+    statusPill.textContent = 'Update';
+  } else if (game.archived) {
+    statusPill.className = 'status-pill pill-archived';
+    statusPill.textContent = 'Archived';
+  } else {
+    statusPill.className = 'status-pill pill-current';
+    statusPill.textContent = 'Current';
+  }
+  right.appendChild(statusPill);
+
+  // Version chip
   const verChip = document.createElement('span');
   verChip.className = `version-chip ${isUpdate ? 'version-chip-update' : ''}`;
   if (isUpdate) {
@@ -541,48 +673,30 @@ function createGameCard(game) {
   const actions = document.createElement('div');
   actions.className = 'card-actions';
 
-  // If update is available, provide 1-click Mark Installed button
+  // Quick 1-click "Mark Installed" button for updates
   if (isUpdate) {
     const markBtn = document.createElement('button');
     markBtn.type = 'button';
     markBtn.className = 'btn btn-primary btn-xs';
     markBtn.textContent = 'Mark Installed';
-    markBtn.title = 'Set installed version to latest version';
+    markBtn.title = 'Set installed version to latest detected version';
     markBtn.addEventListener('click', async (e) => {
       e.stopPropagation();
       markBtn.disabled = true;
       await extAPI.runtime.sendMessage({
         type: 'UPDATE_GAME',
         id: game.id,
-        payload: {
-          installedVersion: game.latestVersion,
-          status: 'current'
-        }
+        payload: { installedVersion: game.latestVersion, status: 'current' }
       });
       await loadData();
     });
     actions.appendChild(markBtn);
   }
 
-  // Archive button
-  const archiveBtn = document.createElement('button');
-  archiveBtn.type = 'button';
-  archiveBtn.className = 'btn btn-secondary btn-xs';
-  archiveBtn.textContent = game.archived ? 'Unarchive' : 'Archive';
-  archiveBtn.addEventListener('click', async (e) => {
-    e.stopPropagation();
-    await extAPI.runtime.sendMessage({
-      type: 'UPDATE_GAME',
-      id: game.id,
-      payload: { archived: !game.archived }
-    });
-    await loadData();
-  });
-  actions.appendChild(archiveBtn);
-
-  // Chevron toggle
+  // Chevron indicator
   const chevron = document.createElement('span');
   chevron.className = 'chevron-icon';
+  chevron.setAttribute('aria-hidden', 'true');
   chevron.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>`;
   actions.appendChild(chevron);
 
@@ -590,24 +704,25 @@ function createGameCard(game) {
   header.appendChild(right);
   card.appendChild(header);
 
-  // Expanded Details Drawer
+  // Expanded Drawer
   const details = document.createElement('div');
   details.className = 'game-card-details';
 
-  // Version Picker Row (lets user change installed version easily)
+  const detailRow = document.createElement('div');
+  detailRow.className = 'card-detail-row';
+
+  // Installed Version Selector
   const verPicker = document.createElement('div');
   verPicker.className = 'card-version-picker';
-
   const vLabel = document.createElement('label');
-  vLabel.textContent = 'Installed:';
+  vLabel.textContent = 'Installed Version:';
   verPicker.appendChild(vLabel);
 
   const vSelect = document.createElement('select');
-  vSelect.className = 'form-select';
+  vSelect.className = 'form-select form-select-sm';
 
-  // Populate with game's known versions or current/latest
-  const versions = [game.installedVersion, game.latestVersion].filter(Boolean);
-  const uniqueVers = [...new Set(versions)];
+  const knownVersions = [game.installedVersion, game.latestVersion].filter(Boolean);
+  const uniqueVers = [...new Set(knownVersions)];
   for (const v of uniqueVers) {
     const opt = document.createElement('option');
     opt.value = v;
@@ -617,14 +732,15 @@ function createGameCard(game) {
   }
   const customOpt = document.createElement('option');
   customOpt.value = '__custom__';
-  customOpt.textContent = 'Edit custom...';
+  customOpt.textContent = 'Edit Custom...';
   vSelect.appendChild(customOpt);
 
+  vSelect.addEventListener('click', (e) => e.stopPropagation());
   vSelect.addEventListener('change', async (e) => {
     e.stopPropagation();
     let newVer = vSelect.value;
     if (newVer === '__custom__') {
-      const customVal = window.prompt('Enter installed version:', game.installedVersion || '');
+      const customVal = window.prompt('Enter your installed version:', game.installedVersion || '');
       if (customVal !== null && customVal.trim()) {
         newVer = customVal.trim();
       } else {
@@ -641,9 +757,55 @@ function createGameCard(game) {
     await loadData();
   });
   verPicker.appendChild(vSelect);
-  details.appendChild(verPicker);
+  detailRow.appendChild(verPicker);
 
-  // Changelog Snippet (if available)
+  // Action buttons: Open Thread, Archive/Unarchive, Untrack
+  const actionGroup = document.createElement('div');
+  actionGroup.className = 'card-actions';
+
+  const openThreadBtn = document.createElement('button');
+  openThreadBtn.type = 'button';
+  openThreadBtn.className = 'btn btn-secondary btn-xs';
+  openThreadBtn.textContent = 'Open Thread';
+  openThreadBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    extAPI.tabs.create({ url: game.url });
+  });
+  actionGroup.appendChild(openThreadBtn);
+
+  const archiveBtn = document.createElement('button');
+  archiveBtn.type = 'button';
+  archiveBtn.className = 'btn btn-secondary btn-xs';
+  archiveBtn.textContent = game.archived ? 'Unarchive' : 'Archive';
+  archiveBtn.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    await extAPI.runtime.sendMessage({
+      type: 'UPDATE_GAME',
+      id: game.id,
+      payload: { archived: !game.archived }
+    });
+    await loadData();
+  });
+  actionGroup.appendChild(archiveBtn);
+
+  const removeBtn = document.createElement('button');
+  removeBtn.type = 'button';
+  removeBtn.className = 'btn btn-secondary btn-xs';
+  removeBtn.textContent = 'Untrack';
+  removeBtn.title = 'Remove from update tracker';
+  removeBtn.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    if (window.confirm(`Stop tracking "${game.title}"?`)) {
+      await extAPI.runtime.sendMessage({ type: 'REMOVE_GAME', id: game.id });
+      await loadData();
+    }
+  });
+  actionGroup.appendChild(removeBtn);
+
+  detailRow.appendChild(actionGroup);
+  details.appendChild(detailRow);
+
+  // Changelog Box
   if (game.changelogSnippet) {
     const clBox = document.createElement('div');
     clBox.className = 'changelog-box';
@@ -651,7 +813,7 @@ function createGameCard(game) {
     details.appendChild(clBox);
   }
 
-  // Tags (if available)
+  // Tags
   if (Array.isArray(game.tags) && game.tags.length > 0) {
     const tagList = document.createElement('div');
     tagList.className = 'tag-list';
@@ -664,38 +826,40 @@ function createGameCard(game) {
     details.appendChild(tagList);
   }
 
-  // Expanded Actions
-  const expActions = document.createElement('div');
-  expActions.className = 'card-actions';
-
-  const openBtn = document.createElement('button');
-  openBtn.type = 'button';
-  openBtn.className = 'btn btn-secondary btn-xs';
-  openBtn.textContent = 'Open Thread';
-  openBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    extAPI.tabs.create({ url: game.url });
-  });
-  expActions.appendChild(openBtn);
-
-  details.appendChild(expActions);
   card.appendChild(details);
 
-  // Click row to toggle expand
+  // Row expand toggle (keyboard & click)
   card.addEventListener('click', () => {
     card.classList.toggle('expanded');
+  });
+  card.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      if (e.target === card) {
+        e.preventDefault();
+        card.classList.toggle('expanded');
+      }
+    }
   });
 
   return card;
 }
 
-// Search filter listener
+// Search input & clear button
 searchInput.addEventListener('input', (e) => {
   searchQuery = e.target.value;
+  btnClearSearch.style.display = searchQuery ? 'block' : 'none';
   renderList();
 });
 
-// Filter pills listener
+btnClearSearch.addEventListener('click', () => {
+  searchInput.value = '';
+  searchQuery = '';
+  btnClearSearch.style.display = 'none';
+  searchInput.focus();
+  renderList();
+});
+
+// Filter pills
 const filterPillsContainer = document.getElementById('filter-pills');
 if (filterPillsContainer) {
   filterPillsContainer.addEventListener('click', (e) => {
@@ -713,22 +877,34 @@ if (filterPillsContainer) {
   });
 }
 
-// Toggle Quick Add panel
+// Quick Add Panel
 btnToggleAdd.addEventListener('click', () => {
   const isHidden = quickAddPanel.style.display === 'none';
   quickAddPanel.style.display = isHidden ? 'flex' : 'none';
+  quickSettingsPanel.style.display = 'none';
   if (isHidden) {
     quickAddInput.focus();
   } else {
     quickAddPreview.style.display = 'none';
+    quickAddFeedback.style.display = 'none';
   }
 });
 
-// Resolve thread for quick add
+btnCloseQuickAdd.addEventListener('click', () => {
+  quickAddPanel.style.display = 'none';
+  quickAddPreview.style.display = 'none';
+  quickAddFeedback.style.display = 'none';
+});
+
 btnQuickAddResolve.addEventListener('click', async () => {
   const rawInput = quickAddInput.value.trim();
-  if (!rawInput) return;
+  if (!rawInput) {
+    quickAddFeedback.textContent = 'Please enter a thread URL or thread ID.';
+    quickAddFeedback.style.display = 'block';
+    return;
+  }
 
+  quickAddFeedback.style.display = 'none';
   btnQuickAddResolve.disabled = true;
   btnQuickAddResolve.textContent = '...';
 
@@ -739,7 +915,8 @@ btnQuickAddResolve.addEventListener('click', async () => {
     });
 
     if (!res || res.error) {
-      alert(res ? res.error : 'Could not fetch thread details.');
+      quickAddFeedback.textContent = res ? res.error : 'Could not resolve thread.';
+      quickAddFeedback.style.display = 'block';
       return;
     }
 
@@ -769,7 +946,7 @@ btnQuickAddResolve.addEventListener('click', async () => {
       previewVersionSelect.style.display = 'none';
       previewVersionCustom.style.display = 'inline-block';
       previewVersionCustom.value = res.latestVersion || '';
-      previewVersionCustom.placeholder = 'Enter version (e.g. v0.68)';
+      previewVersionCustom.placeholder = 'Enter version (e.g. v1.0)';
     }
 
     previewVersionSelect.onchange = () => {
@@ -784,14 +961,14 @@ btnQuickAddResolve.addEventListener('click', async () => {
     quickAddPreview.style.display = 'flex';
   } catch (err) {
     console.error('Resolve error:', err);
-    alert('Failed to resolve thread: ' + err.message);
+    quickAddFeedback.textContent = 'Error: ' + err.message;
+    quickAddFeedback.style.display = 'block';
   } finally {
     btnQuickAddResolve.disabled = false;
     btnQuickAddResolve.textContent = 'Find';
   }
 });
 
-// Confirm Quick Add
 btnConfirmAdd.addEventListener('click', async () => {
   if (!pendingQuickAddData) return;
 
@@ -832,13 +1009,52 @@ btnCancelAdd.addEventListener('click', () => {
   pendingQuickAddData = null;
 });
 
-// Check now button listener
+// Quick Settings Panel
+btnToggleSettings.addEventListener('click', () => {
+  const isHidden = quickSettingsPanel.style.display === 'none';
+  quickSettingsPanel.style.display = isHidden ? 'flex' : 'none';
+  quickAddPanel.style.display = 'none';
+});
+
+btnCloseSettings.addEventListener('click', () => {
+  quickSettingsPanel.style.display = 'none';
+});
+
+settingPollInterval.addEventListener('change', async () => {
+  const pollMinutes = Number(settingPollInterval.value);
+  if (pollMinutes >= 5) {
+    await extAPI.runtime.sendMessage({
+      type: 'UPDATE_SETTINGS',
+      payload: { pollMinutes }
+    });
+  }
+});
+
+settingThemeMode.addEventListener('change', async () => {
+  const themeMode = settingThemeMode.value;
+  applyThemeMode(themeMode);
+  await extAPI.runtime.sendMessage({
+    type: 'UPDATE_SETTINGS',
+    payload: { themeMode }
+  });
+});
+
+btnOpenFullLibrary.addEventListener('click', () => {
+  if (extAPI.runtime.openOptionsPage) {
+    extAPI.runtime.openOptionsPage();
+  } else {
+    extAPI.tabs.create({ url: extAPI.runtime.getURL('src/ui/library/library.html') });
+  }
+});
+
+// Check Now action
 btnCheckNow.addEventListener('click', async () => {
   btnCheckNow.disabled = true;
   const labelEl = btnCheckNow.querySelector('.btn-label') || btnCheckNow;
   const svgEl = btnCheckNow.querySelector('.btn-icon-svg');
   if (svgEl) svgEl.classList.add('spin');
   labelEl.textContent = 'Checking...';
+
   try {
     await extAPI.runtime.sendMessage({ type: 'POLL_NOW' });
     await loadData();
@@ -849,14 +1065,5 @@ btnCheckNow.addEventListener('click', async () => {
   }
 });
 
-// Open Library listener
-btnOpenLibrary.addEventListener('click', () => {
-  if (extAPI.runtime.openOptionsPage) {
-    extAPI.runtime.openOptionsPage();
-  } else {
-    extAPI.tabs.create({ url: extAPI.runtime.getURL('src/ui/library/library.html') });
-  }
-});
-
-// Initialize on load
+// Initialize on DOMContentLoaded
 document.addEventListener('DOMContentLoaded', loadData);

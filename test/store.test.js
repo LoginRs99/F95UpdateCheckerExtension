@@ -14,7 +14,8 @@ import {
   removeGame,
   getPendingUpdatesCount,
   exportData,
-  importData
+  importData,
+  migrateStorageIfNeeded
 } from '../src/background/store.js';
 
 test.beforeEach(() => {
@@ -128,4 +129,33 @@ test('exportData and importData roundtrip smoothly', async () => {
   const reloaded = await getGames();
   assert.equal(Object.keys(reloaded).length, 2);
   assert.equal(reloaded['1'].title, 'Alpha Game');
+});
+
+test('migrateStorageIfNeeded converts legacy array schema and fills settings defaults', async () => {
+  // Setup legacy storage state: array format
+  _setMockStorage({
+    games: [
+      { id: '123', title: 'Legacy Game 1', installedVersion: '1.0' },
+      { threadId: '456', title: 'Legacy Game 2', installedVersion: '2.0', latestVersion: '2.1' }
+    ],
+    settings: {
+      pollMinutes: 60
+    }
+  });
+
+  const migrated = await migrateStorageIfNeeded();
+  assert.equal(migrated, true);
+
+  const games = await getGames();
+  assert.equal(typeof games, 'object');
+  assert.ok(!Array.isArray(games));
+  assert.equal(Object.keys(games).length, 2);
+  assert.equal(games['123'].title, 'Legacy Game 1');
+  assert.equal(games['456'].title, 'Legacy Game 2');
+  assert.equal(games['456'].status, 'update');
+
+  const settings = await getSettings();
+  assert.equal(settings.pollMinutes, 60);
+  assert.equal(settings.domain, 'f95zone.to');
+  assert.equal(settings.dailyRequestCap, 200);
 });

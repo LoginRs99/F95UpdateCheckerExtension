@@ -130,20 +130,23 @@
     const threadId = urlMatch[1];
 
     const headingEl = document.querySelector('h1.p-title-value') || document.querySelector('h1');
-    let title = document.title ? document.title.replace(/\s*\|\s*F95zone.*$/i, '').trim() : `Thread #${threadId}`;
+    let title = document.title ? document.title.replace(/^\s*\(\d+\)\s*/, '').replace(/\s*[-|_]\s*F95zone.*$/i, '').trim() : `Thread #${threadId}`;
     let currentVersion = '';
     const prefixes = [];
 
     if (headingEl) {
-      const labelElements = headingEl.querySelectorAll('span.label');
+      const labelElements = headingEl.querySelectorAll('span.label, .p-title-prefix a, span[class*="label--"], span[class*="pre-"]');
       for (const lbl of labelElements) {
         const lblText = (lbl.textContent || '').trim();
-        if (lblText) prefixes.push(lblText);
+        if (lblText && !prefixes.includes(lblText)) prefixes.push(lblText);
       }
 
       const clone = headingEl.cloneNode(true);
-      for (const l of clone.querySelectorAll('span.label')) l.remove();
-      let text = (clone.textContent || '').replace(/\s+/g, ' ').trim();
+      for (const l of clone.querySelectorAll('span.p-title-prefix, span.label, span.label-append, span[class*="label--"]')) l.remove();
+      let text = (clone.textContent || '')
+        .replace(/&nbsp;/gi, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
 
       const vMatch = text.match(/\[(v?[\d][^\]]*|Ch\.[^\]]*|Ep\.[^\]]*|Part\s*[\d][^\]]*)\]/i);
       if (vMatch) currentVersion = vMatch[1].trim();
@@ -156,6 +159,7 @@
       if (vMatch) {
         text = text.replace(vMatch[0], '').replace(/\s+/g, ' ').trim();
       }
+      text = text.replace(/^[-–—\s]+|[-–—\s]+$/g, '').trim();
       if (text) title = text;
     }
 
@@ -167,15 +171,16 @@
       seen.add(currentVersion.toLowerCase());
     }
 
-    const targets = document.querySelectorAll('.message-body, .bbCodeBlock--spoiler, .bbCodeSpoiler-content, .bbWrapper');
+    const targets = document.querySelectorAll('.message-body, .bbCodeBlock--spoiler, .bbCodeSpoiler-content, .bbCodeBlock-content, .bbWrapper');
     const lineHeadingRegex = /^(?:#+\s*)?(?:(?:v(?:er(?:sion)?)?\.?\s*|ch(?:apter)?\.?\s*|ep(?:isode)?\.?\s*|part\s*))?([0-9]+(?:\.[0-9a-zA-Z_\-]+)*(?:\s*(?:Extra|Final|Hotfix|RE|Patch|v[0-9\.]+))*)\s*(?:[:\-\–\—]|\s*$)/i;
     const explicitTokenRegex = /\b((?:v|ver\.|ch\.|ep\.|part\s*)[0-9]+(?:\.[0-9a-zA-Z_\-]+)*(?:\s*(?:Extra|Final|Hotfix|RE|Patch|v[0-9\.]+))*)\b/gi;
     const bracketRegex = /\[(v?[\d][^\]]*|Ch\.[^\]]*|Ep\.[^\]]*|Part\s*[\d][^\]]*)\]/gi;
+    const episodeRegex = /\b(Episode\s+[0-9]+[a-zA-Z]*(?:\s+Remake)?|Chapter\s+[0-9]+[a-zA-Z]*)\b/gi;
 
     function tryAdd(cand) {
       if (!cand) return;
       cand = cand.replace(/^[\[\(\s]+|[\]\)\:\-\–\—\s]+$/g, '').trim();
-      if (!cand || cand.length < 2 || cand.length > 30) return;
+      if (!cand || cand.length < 2 || cand.length > 35) return;
       if (/^(?:19\d\d|20\d\d)$/.test(cand)) return;
       if (/^(?:1080|720|480|4k)$/i.test(cand)) return;
       if (/^(?:megaupload|pixeldrain|mediafire|google|mega|download|link|changelog)$/i.test(cand)) return;
@@ -192,10 +197,11 @@
       const text = t.innerText || t.textContent || '';
       const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
       for (const line of lines) {
-        if (line.length <= 80) {
+        if (line.length <= 100) {
           const m = line.match(lineHeadingRegex);
           if (m && m[1]) tryAdd(m[0].replace(/[:\-\–\—]$/, ''));
         }
+        for (const m of line.matchAll(episodeRegex)) tryAdd(m[1]);
         for (const m of line.matchAll(explicitTokenRegex)) tryAdd(m[1]);
         for (const m of line.matchAll(bracketRegex)) tryAdd(m[1]);
       }
