@@ -56,12 +56,19 @@ jobs:
           echo "FIREFOX_ZIP=$FIREFOX_ZIP" >> $GITHUB_ENV
 
       - name: Sign Firefox extension with AMO (Unlisted)
-        if: ${{ secrets.AMO_JWT_ISSUER != '' && secrets.AMO_JWT_SECRET != '' }}
         env:
           AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
           AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
         run: |
+          if [ -z "$AMO_JWT_ISSUER" ] || [ -z "$AMO_JWT_SECRET" ]; then
+            echo "AMO credentials not configured. Skipping AMO signing step."
+            exit 0
+          fi
+
+          echo "Installing dependencies for web-ext..."
           npm ci || npm install
+
+          echo "Submitting to Mozilla AMO for signing (unlisted channel)..."
           npx web-ext sign \
             --source-dir dist/firefox \
             --artifacts-dir web-ext-artifacts \
@@ -73,6 +80,8 @@ jobs:
           if [ -n "$SIGNED_XPI" ]; then
             echo "SIGNED_XPI=$SIGNED_XPI" >> $GITHUB_ENV
             echo "Successfully signed Firefox extension: $SIGNED_XPI"
+          else
+            echo "Warning: No .xpi artifact found in web-ext-artifacts/."
           fi
 
       - name: Publish GitHub Release
