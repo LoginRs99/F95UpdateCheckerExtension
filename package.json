@@ -1,6 +1,6 @@
 {
   "name": "f95-update-tracker",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Modern Manifest V3 extension to track F95zone software updates (Chromium and Firefox)",
   "type": "module",
   "private": true,

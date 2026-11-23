@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "f95-update-tracker",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Tracks installed versions of F95zone games and notifies you of new updates.",
   "permissions": [
     "alarms",

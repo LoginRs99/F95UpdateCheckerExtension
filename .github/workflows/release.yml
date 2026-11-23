@@ -55,10 +55,35 @@ jobs:
           echo "CHROMIUM_ZIP=$CHROMIUM_ZIP" >> $GITHUB_ENV
           echo "FIREFOX_ZIP=$FIREFOX_ZIP" >> $GITHUB_ENV
 
+      - name: Sign Firefox extension with AMO (Unlisted)
+        if: ${{ secrets.AMO_JWT_ISSUER != '' && secrets.AMO_JWT_SECRET != '' }}
+        env:
+          AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
+          AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+        run: |
+          npm ci || npm install
+          npx web-ext sign \
+            --source-dir dist/firefox \
+            --artifacts-dir web-ext-artifacts \
+            --api-key="$AMO_JWT_ISSUER" \
+            --api-secret="$AMO_JWT_SECRET" \
+            --channel=unlisted
+
+          SIGNED_XPI=$(find web-ext-artifacts -name "*.xpi" 2>/dev/null | head -n 1)
+          if [ -n "$SIGNED_XPI" ]; then
+            echo "SIGNED_XPI=$SIGNED_XPI" >> $GITHUB_ENV
+            echo "Successfully signed Firefox extension: $SIGNED_XPI"
+          fi
+
       - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "${{ github.ref_name }}" "$CHROMIUM_ZIP" "$FIREFOX_ZIP" \
+          RELEASE_FILES=("$CHROMIUM_ZIP" "$FIREFOX_ZIP")
+          if [ -n "$SIGNED_XPI" ] && [ -f "$SIGNED_XPI" ]; then
+            RELEASE_FILES+=("$SIGNED_XPI")
+          fi
+
+          gh release create "${{ github.ref_name }}" "${RELEASE_FILES[@]}" \
             --title "f95-update-tracker ${{ github.ref_name }}" \
             --generate-notes
